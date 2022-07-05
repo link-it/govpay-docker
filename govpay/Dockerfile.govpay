@@ -72,9 +72,9 @@ COPY commons/standalone_wrapper.sh commons/initgovpay.sh commons/config_datasour
 ARG govpay_database_vendor=hsql
 ENV GOVPAY_DB_TYPE=${govpay_database_vendor}
 
-ARG oracle_custom_jdbc=commons/standalone_wrapper.sh
-COPY ${oracle_custom_jdbc}* /var/tmp/oracle_custom_jdbc
-RUN [ -d /var/tmp/oracle_custom_jdbc ] || echo "Driver jdbc Oracle non presente"
+ARG jdbc_custom_jar=commons/standalone_wrapper.sh
+COPY ${jdbc_custom_jar}* /var/tmp/jdbc_custom_jar
+RUN [ -d /var/tmp/jdbc_custom_jar ] || echo "Driver jdbc Custom non presente"
 
 RUN echo -e 'embed-server --server-config=standalone.xml --std-out=echo \n\
 echo "Aggiungo Workers http" \n\

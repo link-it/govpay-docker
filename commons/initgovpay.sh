@@ -55,6 +55,11 @@ do
         JDBC_URL="jdbc:postgresql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}"
         START_TRANSACTION="START TRANSACTION;"
     ;;
+    mysql) 
+        [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=3306
+        JDBC_URL="jdbc:mysql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}"
+        START_TRANSACTION="START TRANSACTION;"
+    ;;
     hsql|*)
         DBNAME=govpay
         DBUSER=govpay
@@ -189,6 +194,17 @@ EOSQLTOOL
                 #         /opt/${GOVPAY_DB_TYPE:-hsql}/GovPay${SUFFISSO}.sql > /var/tmp/${GOVPAY_DB_TYPE:-hsql}/GovPay${SUFFISSO}.sql 
                 #     fi
                 # fi
+                #
+                # Aggiusto l'SQL per il database mysql 
+                #
+                if [ "${GOVPAY_DB_TYPE:-hsql}" == 'mysql' ]
+                then
+                    # I COMMENT delle colonne e delle tabelle contengono il carattere apice con escape; "\'"
+                    # sembra che questo causi dei problemi nell'interpretare corettamente lo script al client 
+                    # Sostituisco la coppia di caratteri con uno spazio singolo
+                    #
+                    sed -i -e "/COMMENT/s%\\\'% %g" /var/tmp/${GOVPAY_DB_TYPE:-hsql}/gov_pay${SUFFISSO}.sql
+                fi
                 #
                 # Aggiusto l'SQL per il database oracle 
                 #

@@ -14,10 +14,81 @@ postgresql)
 /subsystem=datasources/data-source=govpay: write-attribute(name=password, value=\${env.GOVPAY_DB_PASSWORD})"
 
 ;;
+mysql)
+    MYSQL_DRIVER_JDBC=
+    declare -a lista_jar=( /var/tmp/jdbc_custom_jar/*.jar )
+    if [ ${#lista_jar[@]} -eq 1 -a "${lista_jar[0]}" == '/var/tmp/jdbc_custom_jar/*.jar' ]
+    then
+        echo "Driver JDBC oracle non presente"
+        #exit 1
+    elif [ ${#lista_jar[@]} -eq 1 ]
+    then
+        # è presente solo un jar: lo utilizzo
+        MYSQL_DRIVER_JDBC="${lista_jar[0]}" 
+    elif [ ${#lista_jar[@]} -gt 1 ]
+    then
+        # sono presenti diversi jar: provo a riconoscere la versione e ad usare il più recente 
+        MYSQL_DRIVER_JDBC=
+        MAX_MAJ=0
+        MAX_MIN=0
+        MAX_REL=0
+        for j in ${lista_jar[@]}
+        do
+            JAR_NAME=$(basename $j)
+            if [ "${JAR_NAME:0:21}" == 'mysql-connector-java-' ]
+            then
+                CONNECTOR_VERSION_FULL="${JAR_NAME:21:(-4)}"
+                CONNECTOR_VERSION="${OJDBC_VERSION_FULL%%[._-]*}"
+                # skippo ojdbc14 che va bene per java 1.4
+                if [[ "${CONNECTOR_VERSION}" =~ '[0-9]+\.[0-9]+\.[0-9]+' ]]
+                then
+                    read -d MAJ MIN REL <<< "${CONNECTOR_VERSION}"
+                    if [ ${MAJ} -gt ${MAX_MAJ} ]
+                    then
+                        MYSQL_DRIVER_JDBC=${j} 
+                        MAX_MAJ=${MAJ}
+                        MAX_MIN=${MIN}
+                        MAX_REL=${REL}
+                    elif [ ${MIN} -gt ${MAX_MIN} ]
+                    then
+                        MYSQL_DRIVER_JDBC=${j} 
+                        MAX_MIN=${MIN}
+                        MAX_REL=${REL}
+                    elif [ ${REL} -gt ${MAX_REL} ]
+                    then
+                        MYSQL_DRIVER_JDBC=${j} 
+                        MAX_REL=${REL}
+                    fi
+                fi
+            fi
+        done
+        if [ ${MAX} -eq  0 ]
+        then
+            # non ho trovato un jar con il nome giusto. Prendo il file con la data piu recente
+            MAX=0
+            for j in ${lista_jar[@]}
+            do
+                AGE=$(stat "$j" --printf '%Z')
+                [ ${AGE} -gt ${MAX} ] && MYSQL_DRIVER_JDBC=$j && MAX=${AGE}
+            done
+        fi
+    fi
+    [ -n "${MYSQL_DRIVER_JDBC}" ] && cp -f ${MYSQL_DRIVER_JDBC} /var/tmp/mysql-jdbc.jar
+
+    GOVPAY_DRIVER_JDBC="/var/tmp/mysql-jdbc.jar"
+    GOVPAY_DS_DRIVER_CLASS='com.mysql.cj.jdbc.Driver'
+    GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
+
+    # Le variabili DATASOURCE_CONN_PARAM, DATASOURCE_{CONF,TRAC,STAT}_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
+    JDBC_RUN_URL='jdbc:mysql://\${env.GOVPAY_DB_SERVER}/\${env.GOVPAY_DB_NAME}\${env.DATASOURCE_CONN_PARAM:}'
+    JDBC_RUN_AUTH="/subsystem=datasources/data-source=govpay: write-attribute(name=user-name, value=\${env.GOVPAY_DB_USER})
+/subsystem=datasources/data-source=govpay: write-attribute(name=password, value=\${env.GOVPAY_DB_PASSWORD})"
+
+;;
 oracle)
     ORACLE_DRIVER_JDBC=
-    declare -a lista_jar=( /var/tmp/oracle_custom_jdbc/*.jar )
-    if [ ${#lista_jar[@]} -eq 1 -a "${lista_jar[0]}" == '/var/tmp/oracle_custom_jdbc/*.jar' ]
+    declare -a lista_jar=( /var/tmp/jdbc_custom_jar/*.jar )
+    if [ ${#lista_jar[@]} -eq 1 -a "${lista_jar[0]}" == '/var/tmp/jdbc_custom_jar/*.jar' ]
     then
         echo "Driver JDBC oracle non presente"
         #exit 1

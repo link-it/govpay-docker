@@ -9,12 +9,12 @@ echo "Options
 -h             : Mostra questa pagina di aiuto
 
 Installer Sorgente:
--v <VERSIONE>  : Imposta la versione dell'installer binario da utilizzare per il build (default: 3.5.1)
+-v <VERSIONE>  : Imposta la versione dell'installer binario da utilizzare per il build (default: 3.6.0)
 -l <FILE>      : Usa un'installer binario sul filesystem locale (incompatibile con -j)
 -j             : Usa l'installer prodotto dalla pipeline jenkins https://jenkins.link.it/govpay/risultati-testsuite/installer/govpay-installer-<version>.tgz
 
 Personalizzazioni:
--d <TIPO>      : Prepara l'immagine per essere utilizzata su un particolare database  (valori: [ hsql, postgresql, oracle] , default: hsql)
+-d <TIPO>      : Prepara l'immagine per essere utilizzata su un particolare database  (valori: [ hsql, postgresql, mysql, oracle] , default: hsql)
 -e <PATH>      : Imposta il path interno utilizzato per i file di configurazione di govpay 
 -f <PATH>      : Imposta il path interno utilizzato per i log di govpay
 
@@ -22,7 +22,7 @@ Avanzate:
 -i <FILE>      : Usa il template ant.installer.properties indicato per la generazione degli archivi dall'installer
 -r <DIRECTORY> : Inserisce il contenuto della directory indicata, tra i contenuti custom 
 -w <DIRECTORY> : Esegue tutti gli scripts widlfly contenuti nella directory indicata
--o <DIRECTORY> : Utilizza il driver JDBC Oracle contenuto dentro la directory per configurare l'immagine (il file viene cancellato al termine)
+-o <DIRECTORY> : Utilizza il driver JDBC contenuto dentro la directory per configurare l'immagine (il file viene cancellato al termine)
 "
 }
 
@@ -49,7 +49,7 @@ while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
     t) TAG="$OPTARG"; NO_COLON=${TAG//:/}
       [ ${#TAG} -eq ${#NO_COLON} -o "${TAG:0:1}" == ':' -o "${TAG:(-1):1}" == ':' ] && { echo "Il tag fornito \"$TAG\" non utilizza la sintassi <repository>:<tagname>"; exit 2; } ;;
     v) VER="$OPTARG"; [ -n "$BRANCH" ] && { echo "Le opzioni -v e -b sono incompatibili. Impostare solo una delle due."; exit 2; } ;;
-    d) DB="${OPTARG}"; case "$DB" in hsql);;postgresql);;oracle);;*) echo "Database non supportato: $DB"; exit 2;; esac ;;
+    d) DB="${OPTARG}"; case "$DB" in hsql);;postgresql);;mysql);;oracle);;*) echo "Database non supportato: $DB"; exit 2;; esac ;;
     l) LOCALFILE="$OPTARG"
         [ ! -f "${LOCALFILE}" ] && { echo "Il file indicato non esiste o non e' raggiungibile [${LOCALFILE}]."; exit 3; } 
        ;;
@@ -67,9 +67,9 @@ while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
         [ ! -d "${CUSTOM_WIDLFLY_CLI}" ] && { echo "la directory indicata non esiste o non e' raggiungibile [${CUSTOM_WIDLFLY_CLI}]."; exit 3; }
         [ -z "$(ls -A ${CUSTOM_WIDLFLY_CLI})" ] && { echo "la directory [${CUSTOM_WIDLFLY_CLI}] e' vuota.";  }
         ;;
-    o) CUSTOM_ORACLE_JDBC="${OPTARG}"
-        [ ! -d "${CUSTOM_ORACLE_JDBC}" ] && { echo "la directory indicata non esiste o non e' raggiungibile [${CUSTOM_ORACLE_JDBC}]."; exit 3; }
-        [ -z "$(ls -A ${CUSTOM_ORACLE_JDBC})" ] && { echo "la directory [${CUSTOM_ORACLE_JDBC}] e' vuota.";  }
+    o) CUSTOM_JDBC_JAR="${OPTARG}"
+        [ ! -d "${CUSTOM_JDBC_JAR}" ] && { echo "la directory indicata non esiste o non e' raggiungibile [${CUSTOM_JDBC_JAR}]."; exit 3; }
+        [ -z "$(ls -A ${CUSTOM_JDBC_JAR})" ] && { echo "la directory [${CUSTOM_JDBC_JAR}] e' vuota.";  }
         ;;
     e) CUSTOM_GOVPAY_HOME="${OPTARG}" ;;
     f) CUSTOM_GOVPAY_LOG="${OPTARG}" ;;
@@ -89,7 +89,7 @@ mkdir -p buildcontext/
 cp -fr commons buildcontext/
 
 DOCKERBUILD_OPT=()
-DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_fullversion=${VER:-3.5.1}")
+DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_fullversion=${VER:-3.6.0}")
 [ -n "${DB}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_database_vendor=${DB}")
 [ -n "${TEMPLATE}" ] &&  cp -f "${TEMPLATE}" buildcontext/commons/
 [ -n "${CUSTOM_GOVPAY_HOME}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_home=${CUSTOM_GOVPAY_HOME}")
@@ -114,7 +114,7 @@ fi
 
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
-  -t linkitaly/govpay-installer_${DB:-hsql}:${VER:-3.5.1} \
+  -t linkitaly/govpay-installer_${DB:-hsql}:${VER:-3.6.0} \
   -f ${INSTALLER_DOCKERFILE} buildcontext
 RET=$?
 [ ${RET} -eq  0 ] || exit ${RET}
@@ -124,12 +124,13 @@ RET=$?
 if [ -z "$TAG" ] 
 then
   REPO=linkitaly/govpay
-  TAGNAME=${VER:-3.5.1}
+  TAGNAME=${VER:-3.6.0}
   
   # mantengo i nomi dei tag compatibili con quelli usati in precedenza
   case "${DB:-hsql}" in
   hsql) TAG="${REPO}:${TAGNAME}" ;;
   postgresql) TAG="${REPO}:${TAGNAME}_postgres" ;;
+  mysql) TAG="${REPO}:${TAGNAME}_mysql" ;;
   oracle) TAG="${REPO}:${TAGNAME}_oracle" ;;
   esac
 fi
@@ -140,10 +141,10 @@ then
   DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "wildfly_custom_scripts=custom_widlfly_cli")
 fi
 
-if [ -n "${CUSTOM_ORACLE_JDBC}" ]
+if [ -n "${CUSTOM_JDBC_JAR}" ]
 then
-  cp -r ${CUSTOM_ORACLE_JDBC}/ buildcontext/custom_oracle_jdbc
-  DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "oracle_custom_jdbc=custom_oracle_jdbc")
+  cp -r ${CUSTOM_JDBC_JAR}/ buildcontext/custom_jdbc_jar
+  DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "jdbc_custom_jar=custom_jdbc_jar")
 fi
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
@@ -190,6 +191,34 @@ EOYAML
         - POSTGRES_USER=govpay
         - POSTGRES_PASSWORD=govpay
 EOYAML
+  elif [ "${DB:-hsql}" == 'mysql' ]
+  then
+    cat - << EOYAML >> compose/docker-compose.yaml
+        # Il driver deve essere compiato manualmente nella directory corrente
+        - ./mysql-connector-java-8.0.29.jar:/tmp/mysql-connector-java-8.0.29.jar 
+    environment:
+        - GOVPAY_DB_SERVER=my_govpay_${SHORT}
+        - GOVPAY_DB_NAME=govpaydb
+        - GOVPAY_DB_USER=govpay
+        - GOVPAY_DB_PASSWORD=govpay
+        - GOVPAY_MYSQL_JDBC_PATH=/tmp/mysql-connector-java-8.0.29.jar
+        - GOVPAY_POP_DB_SKIP=false
+  database:
+    container_name: my_govpay_${SHORT}
+    image: mariadb:10.6
+    environment:
+      - MARIADB_DATABASE=govpaydb
+      - MARIADB_USER=govpay
+      - MARIADB_PASSWORD=govpay
+      - MARIADB_ROOT_PASSWORD=my-secret-pw
+    ports:
+       - 3306:3306
+EOYAML
+    echo 
+    echo "ATTENZIONE: Copiare il driver jdbc Mysql 'mysql-connector-java-8.0.29.jar' dentro la directory './compose/'"
+    echo
+    echo "ATTENZIONE: Copiare il driver jdbc Oracle 'mysql-connector-java-8.0.29.jar' dentro la directory './compose/'" > compose/README.first
+
   elif [ "${DB:-hsql}" == 'oracle' ]
   then
     mkdir -p compose/oracle_startup
@@ -221,7 +250,7 @@ EOSQL
         - GOVPAY_LIVE_DB_CHECK_MAX_RETRY=120
         - GOVPAY_READY_DB_CHECK_MAX_RETRY=600
   database:
-    container_name: or_govpay_3.5.1_oracle
+    container_name: or_govpay_${SHORT}
     image: container-registry.oracle.com/database/enterprise:19.3.0.0
     shm_size: 2g
     environment:
