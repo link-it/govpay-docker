@@ -171,6 +171,8 @@ services:
         - database
     ports:
         - 8080:8080
+        - 8081:8081
+        - 8082:8082
     volumes:
         - ./govpay_log:${CUSTOM_GOVPAY_LOG:-/var/log/govpay}
 EOYAML
