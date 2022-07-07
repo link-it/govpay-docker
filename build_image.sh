@@ -185,11 +185,14 @@ EOYAML
   if [ "${DB:-hsql}" == 'postgresql' ]
   then
     cat - << EOYAML >> compose/docker-compose.yaml
+          # Il driver deve essere compiato manualmente nella directory corrente
+        - ./postgresql-42.4.0.jar:/tmp/postgresql-42.4.0.jar 
     environment:
         - GOVPAY_DB_SERVER=pg_govpay_${SHORT}
         - GOVPAY_DB_NAME=govpaydb
         - GOVPAY_DB_USER=govpay
         - GOVPAY_DB_PASSWORD=govpay
+        - GOVPAY_POSTGRESQL_JDBC_PATH=/tmp/postgresql-42.4.0.jar 
         - GOVPAY_POP_DB_SKIP=false
   database:
     container_name: pg_govpay_${SHORT}
@@ -199,6 +202,10 @@ EOYAML
         - POSTGRES_USER=govpay
         - POSTGRES_PASSWORD=govpay
 EOYAML
+    echo 
+    echo "ATTENZIONE: Copiare il driver jdbc postgresql 'postgresql-42.4.0.jar' dentro la directory './compose/'"
+    echo
+    echo "ATTENZIONE: Copiare il driver jdbc postgresql 'postgresql-42.4.0.jar' dentro la directory './compose/'" > compose/README.first
   elif [ "${DB:-hsql}" == 'mariadb' ]
   then
     cat - << EOYAML >> compose/docker-compose.yaml
@@ -223,9 +230,9 @@ EOYAML
        - 3306:3306
 EOYAML
     echo 
-    echo "ATTENZIONE: Copiare il driver jdbc Mysql 'mariadb-java-client-3.0.6.jar' dentro la directory './compose/'"
+    echo "ATTENZIONE: Copiare il driver jdbc Mariadb 'mariadb-java-client-3.0.6.jar' dentro la directory './compose/'"
     echo
-    echo "ATTENZIONE: Copiare il driver jdbc Oracle 'mariadb-java-client-3.0.6.jar' dentro la directory './compose/'" > compose/README.first
+    echo "ATTENZIONE: Copiare il driver jdbc Mariadb 'mariadb-java-client-3.0.6.jar' dentro la directory './compose/'" > compose/README.first
   elif [ "${DB:-hsql}" == 'mysql' ]
   then
     cat - << EOYAML >> compose/docker-compose.yaml
@@ -252,7 +259,7 @@ EOYAML
     echo 
     echo "ATTENZIONE: Copiare il driver jdbc Mysql 'mysql-connector-java-8.0.29.jar' dentro la directory './compose/'"
     echo
-    echo "ATTENZIONE: Copiare il driver jdbc Oracle 'mysql-connector-java-8.0.29.jar' dentro la directory './compose/'" > compose/README.first
+    echo "ATTENZIONE: Copiare il driver jdbc Mysql 'mysql-connector-java-8.0.29.jar' dentro la directory './compose/'" > compose/README.first
 
 
   elif [ "${DB:-hsql}" == 'oracle' ]
