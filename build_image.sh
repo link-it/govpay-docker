@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 function printHelp() {
 echo "Usage $(basename $0) [ -t <repository>:<tagname> | <Installer Sorgente> | <Personalizzazioni> | <Avanzate> | -h ]"
@@ -9,7 +9,7 @@ echo "Options
 -h             : Mostra questa pagina di aiuto
 
 Installer Sorgente:
--v <VERSIONE>  : Imposta la versione dell'installer binario da utilizzare per il build (default: 3.6.0)
+-v <VERSIONE>  : Imposta la versione dell'installer binario da utilizzare per il build (default: ${LATEST_GOVPAY_RELEASE})
 -l <FILE>      : Usa un'installer binario sul filesystem locale (incompatibile con -j)
 -j             : Usa l'installer prodotto dalla pipeline jenkins https://jenkins.link.it/govpay/risultati-testsuite/installer/govpay-installer-<version>.tgz
 
@@ -22,7 +22,6 @@ Avanzate:
 -i <FILE>      : Usa il template ant.installer.properties indicato per la generazione degli archivi dall'installer
 -r <DIRECTORY> : Inserisce il contenuto della directory indicata, tra i contenuti custom 
 -w <DIRECTORY> : Esegue tutti gli scripts widlfly contenuti nella directory indicata
--o <DIRECTORY> : Utilizza il driver JDBC contenuto dentro la directory per configurare l'immagine (il file viene cancellato al termine)
 "
 }
 
@@ -44,11 +43,15 @@ ARCHIVI=
 CUSTOM_MANAGER=
 CUSTOM_MANAGER=
 CUSTOM_WIDLFLY_CLI=
+
+LATEST_LINK="$(curl -qw '%{redirect_url}\n' https://github.com/link-it/govpay/releases/latest 2> /dev/null)"
+LATEST_GOVPAY_RELEASE="${LATEST_LINK##*/}"
+
 while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
   case $opt in
     t) TAG="$OPTARG"; NO_COLON=${TAG//:/}
       [ ${#TAG} -eq ${#NO_COLON} -o "${TAG:0:1}" == ':' -o "${TAG:(-1):1}" == ':' ] && { echo "Il tag fornito \"$TAG\" non utilizza la sintassi <repository>:<tagname>"; exit 2; } ;;
-    v) VER="$OPTARG"; [ -n "$BRANCH" ] && { echo "Le opzioni -v e -b sono incompatibili. Impostare solo una delle due."; exit 2; } ;;
+    v) VER="$OPTARG"  ;;
     d) DB="${OPTARG}"; case "$DB" in hsql);;postgresql);;mysql);;mariadb);;oracle);;*) echo "Database non supportato: $DB"; exit 2;; esac ;;
     l) LOCALFILE="$OPTARG"
         [ ! -f "${LOCALFILE}" ] && { echo "Il file indicato non esiste o non e' raggiungibile [${LOCALFILE}]."; exit 3; } 
@@ -66,10 +69,6 @@ while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
     w) CUSTOM_WIDLFLY_CLI="${OPTARG}"
         [ ! -d "${CUSTOM_WIDLFLY_CLI}" ] && { echo "la directory indicata non esiste o non e' raggiungibile [${CUSTOM_WIDLFLY_CLI}]."; exit 3; }
         [ -z "$(ls -A ${CUSTOM_WIDLFLY_CLI})" ] && { echo "la directory [${CUSTOM_WIDLFLY_CLI}] e' vuota.";  }
-        ;;
-    o) CUSTOM_JDBC_JAR="${OPTARG}"
-        [ ! -d "${CUSTOM_JDBC_JAR}" ] && { echo "la directory indicata non esiste o non e' raggiungibile [${CUSTOM_JDBC_JAR}]."; exit 3; }
-        [ -z "$(ls -A ${CUSTOM_JDBC_JAR})" ] && { echo "la directory [${CUSTOM_JDBC_JAR}] e' vuota.";  }
         ;;
     e) CUSTOM_GOVPAY_HOME="${OPTARG}" ;;
     f) CUSTOM_GOVPAY_LOG="${OPTARG}" ;;
@@ -89,7 +88,7 @@ mkdir -p buildcontext/
 cp -fr commons buildcontext/
 
 DOCKERBUILD_OPT=()
-DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_fullversion=${VER:-3.6.0}")
+DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_fullversion=${VER:-${LATEST_GOVPAY_RELEASE}}")
 [ -n "${TEMPLATE}" ] &&  cp -f "${TEMPLATE}" buildcontext/commons/
 [ -n "${CUSTOM_GOVPAY_HOME}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_home=${CUSTOM_GOVPAY_HOME}")
 [ -n "${CUSTOM_GOVPAY_LOG}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_log=${CUSTOM_GOVPAY_LOG}")
@@ -122,14 +121,15 @@ then
 fi
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
-  -t linkitaly/govpay-installer_${DB:-hsql}:${VER:-3.6.0} \
+  -t linkitaly/govpay-installer_${DB:-hsql}:${VER:-${LATEST_GOVPAY_RELEASE}} \
   -f ${INSTALLER_DOCKERFILE} buildcontext
 RET=$?
 [ ${RET} -eq  0 ] || exit ${RET}
  
 if [ "${DB}" == 'mariadb' ]
 then
-  unset  DOCKERBUILD_OPTS[-1]
+  c=$(( ${#DOCKERBUILD_OPTS[@]} - 1 ))
+  unset  DOCKERBUILD_OPTS[$c]
   DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} "govpay_database_vendor=mariadb")
 fi
 # Build imagine govpay
@@ -137,7 +137,7 @@ fi
 if [ -z "$TAG" ] 
 then
   REPO=linkitaly/govpay
-  TAGNAME=${VER:-3.6.0}
+  TAGNAME=${VER:-${LATEST_GOVPAY_RELEASE}}
   
   # mantengo i nomi dei tag compatibili con quelli usati in precedenza
   case "${DB:-hsql}" in
@@ -152,12 +152,6 @@ then
   cp -r ${CUSTOM_WIDLFLY_CLI}/ buildcontext/custom_widlfly_cli
   DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "wildfly_custom_scripts=custom_widlfly_cli")
 fi
-
-# if [ -n "${CUSTOM_JDBC_JAR}" ]
-# then
-#   cp -r ${CUSTOM_JDBC_JAR}/ buildcontext/custom_jdbc_jar
-#   DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "jdbc_custom_jar=custom_jdbc_jar")
-# fi
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
   --build-arg source_image=linkitaly/govpay-installer_${DB:-hsql} \
