@@ -8,129 +8,41 @@ postgresql)
     GOVPAY_DS_DRIVER_CLASS='org.postgresql.Driver'
     GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
 
-    # Le variabili DATASOURCE_CONN_PARAM, DATASOURCE_{CONF,TRAC,STAT}_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
+    # Le variabili DATASOURCE_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
     JDBC_RUN_URL='jdbc:postgresql://\${env.GOVPAY_DB_SERVER}/\${env.GOVPAY_DB_NAME}\${env.DATASOURCE_CONN_PARAM:}'
     JDBC_RUN_AUTH="/subsystem=datasources/data-source=govpay: write-attribute(name=user-name, value=\${env.GOVPAY_DB_USER})
 /subsystem=datasources/data-source=govpay: write-attribute(name=password, value=\${env.GOVPAY_DB_PASSWORD})"
 
 ;;
 mysql)
-    MYSQL_DRIVER_JDBC=
-    declare -a lista_jar=( /var/tmp/jdbc_custom_jar/*.jar )
-    if [ ${#lista_jar[@]} -eq 1 -a "${lista_jar[0]}" == '/var/tmp/jdbc_custom_jar/*.jar' ]
-    then
-        echo "Driver JDBC oracle non presente"
-        #exit 1
-    elif [ ${#lista_jar[@]} -eq 1 ]
-    then
-        # è presente solo un jar: lo utilizzo
-        MYSQL_DRIVER_JDBC="${lista_jar[0]}" 
-    elif [ ${#lista_jar[@]} -gt 1 ]
-    then
-        # sono presenti diversi jar: provo a riconoscere la versione e ad usare il più recente 
-        MYSQL_DRIVER_JDBC=
-        MAX_MAJ=0
-        MAX_MIN=0
-        MAX_REL=0
-        for j in ${lista_jar[@]}
-        do
-            JAR_NAME=$(basename $j)
-            if [ "${JAR_NAME:0:21}" == 'mysql-connector-java-' ]
-            then
-                CONNECTOR_VERSION_FULL="${JAR_NAME:21:(-4)}"
-                CONNECTOR_VERSION="${OJDBC_VERSION_FULL%%[._-]*}"
-                # skippo ojdbc14 che va bene per java 1.4
-                if [[ "${CONNECTOR_VERSION}" =~ '[0-9]+\.[0-9]+\.[0-9]+' ]]
-                then
-                    read -d MAJ MIN REL <<< "${CONNECTOR_VERSION}"
-                    if [ ${MAJ} -gt ${MAX_MAJ} ]
-                    then
-                        MYSQL_DRIVER_JDBC=${j} 
-                        MAX_MAJ=${MAJ}
-                        MAX_MIN=${MIN}
-                        MAX_REL=${REL}
-                    elif [ ${MIN} -gt ${MAX_MIN} ]
-                    then
-                        MYSQL_DRIVER_JDBC=${j} 
-                        MAX_MIN=${MIN}
-                        MAX_REL=${REL}
-                    elif [ ${REL} -gt ${MAX_REL} ]
-                    then
-                        MYSQL_DRIVER_JDBC=${j} 
-                        MAX_REL=${REL}
-                    fi
-                fi
-            fi
-        done
-        if [ ${MAX} -eq  0 ]
-        then
-            # non ho trovato un jar con il nome giusto. Prendo il file con la data piu recente
-            MAX=0
-            for j in ${lista_jar[@]}
-            do
-                AGE=$(stat "$j" --printf '%Z')
-                [ ${AGE} -gt ${MAX} ] && MYSQL_DRIVER_JDBC=$j && MAX=${AGE}
-            done
-        fi
-    fi
-    [ -n "${MYSQL_DRIVER_JDBC}" ] && cp -f ${MYSQL_DRIVER_JDBC} /var/tmp/mysql-jdbc.jar
-
     GOVPAY_DRIVER_JDBC="/var/tmp/mysql-jdbc.jar"
     GOVPAY_DS_DRIVER_CLASS='com.mysql.cj.jdbc.Driver'
     GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
 
-    # Le variabili DATASOURCE_CONN_PARAM, DATASOURCE_{CONF,TRAC,STAT}_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
+    # Le variabili DATASOURCE_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
     JDBC_RUN_URL='jdbc:mysql://\${env.GOVPAY_DB_SERVER}/\${env.GOVPAY_DB_NAME}\${env.DATASOURCE_CONN_PARAM:}'
     JDBC_RUN_AUTH="/subsystem=datasources/data-source=govpay: write-attribute(name=user-name, value=\${env.GOVPAY_DB_USER})
 /subsystem=datasources/data-source=govpay: write-attribute(name=password, value=\${env.GOVPAY_DB_PASSWORD})"
 
 ;;
+mariadb)
+    GOVPAY_DRIVER_JDBC="/var/tmp/mariadb-jdbc.jar"
+    GOVPAY_DS_DRIVER_CLASS='org.mariadb.jdbc.Driver'
+    GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
+
+    # Le variabili DATASOURCE_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
+    JDBC_RUN_URL='jdbc:mariadb://\${env.GOVPAY_DB_SERVER}/\${env.GOVPAY_DB_NAME}\${env.DATASOURCE_CONN_PARAM:}'
+    JDBC_RUN_AUTH="/subsystem=datasources/data-source=govpay: write-attribute(name=user-name, value=\${env.GOVPAY_DB_USER})
+/subsystem=datasources/data-source=govpay: write-attribute(name=password, value=\${env.GOVPAY_DB_PASSWORD})"
+
+;;
 oracle)
-    ORACLE_DRIVER_JDBC=
-    declare -a lista_jar=( /var/tmp/jdbc_custom_jar/*.jar )
-    if [ ${#lista_jar[@]} -eq 1 -a "${lista_jar[0]}" == '/var/tmp/jdbc_custom_jar/*.jar' ]
-    then
-        echo "Driver JDBC oracle non presente"
-        #exit 1
-    elif [ ${#lista_jar[@]} -eq 1 ]
-    then
-        # è presente solo un jar: lo utilizzo
-        ORACLE_DRIVER_JDBC="${lista_jar[0]}" 
-    elif [ ${#lista_jar[@]} -gt 1 ]
-    then
-        # sono presenti diversi jar: provo a riconoscere la versione e ad usare il più recente 
-        ORACLE_DRIVER_JDBC=
-        MAX=0
-        for j in ${lista_jar[@]}
-        do
-            JAR_NAME=$(basename $j)
-            if [ "${JAR_NAME:0:5}" == 'ojdbc' ]
-            then
-                OJDBC_VERSION_FULL="${JAR_NAME:5:(-4)}"
-                OJDBC_VERSION="${OJDBC_VERSION_FULL%%[._-]*}"
-                # skippo ojdbc14 che va bene per java 1.4
-                [ ${OJDBC_VERSION} -eq 14 ] && continue
-                [ ${OJDBC_VERSION} -gt ${MAX} ] && ORACLE_DRIVER_JDBC=$j && MAX=${OJDBC_VERSION}
-            fi
-        done
-        if [ ${MAX} -eq  0 ]
-        then
-            # non ho trovato un jar con il nome giusto. Prendo il file con la data piu recente
-            MAX=0
-            for j in ${lista_jar[@]}
-            do
-                AGE=$(stat "$j" --printf '%Z')
-                [ ${AGE} -gt ${MAX} ] && ORACLE_DRIVER_JDBC=$j && MAX=${AGE}
-            done
-        fi
-    fi
-    [ -n "${ORACLE_DRIVER_JDBC}" ] && cp -f ${ORACLE_DRIVER_JDBC} /var/tmp/oracle-jdbc.jar
     GOVPAY_DRIVER_JDBC='/var/tmp/oracle-jdbc.jar'
     GOVPAY_DS_DRIVER_CLASS='oracle.jdbc.OracleDriver'
     GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1 FROM DUAL'
 
     # Le variabili ORACLE_JDBC_SERVER_PREFIX ed ORACLE_JDBC_DB_SEPARATOR sono impostate dallo standalone_wrapper.sh
-    # Le variabili DATASOURCE_CONN_PARAM, DATASOURCE_{CONF,TRAC,STAT}_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
+    # Le variabili DATASOURCE_CONN_PARAM, sono impostate dallo standalone_wrapper.sh
     JDBC_RUN_URL='jdbc:oracle:thin:@\${env.ORACLE_JDBC_SERVER_PREFIX}\${env.GOVPAY_DB_SERVER}\${env.ORACLE_JDBC_DB_SEPARATOR}\${env.GOVPAY_DB_NAME}\${env.DATASOURCE_CONN_PARAM:}'
     JDBC_RUN_AUTH="/subsystem=datasources/data-source=govpay: write-attribute(name=user-name, value=\${env.GOVPAY_DB_USER})
 /subsystem=datasources/data-source=govpay: write-attribute(name=password, value=\${env.GOVPAY_DB_PASSWORD})"
@@ -151,8 +63,8 @@ esac
 cat - << EOCLI >> "${CLI_SCRIPT_FILE}"
 embed-server --server-config=standalone.xml --std-out=echo
 echo "Carico modulo e driver JDBC per ${GOVPAY_DB_TYPE:-hsql}"
-module add --name=${GOVPAY_DB_TYPE:-hsql}Mod --resources=${GOVPAY_DRIVER_JDBC} --dependencies=javax.api,javax.transaction.api --allow-nonexistent-resources
-/subsystem=datasources/jdbc-driver=${GOVPAY_DB_TYPE:-hsql}Driver:add(driver-name=${GOVPAY_DB_TYPE:-hsql}Driver, driver-module-name=${GOVPAY_DB_TYPE:-hsql}Mod, driver-class-name=${GOVPAY_DS_DRIVER_CLASS})
+module add --name=govpayJDBCMod --resources=${GOVPAY_DRIVER_JDBC} --dependencies=javax.api,javax.transaction.api --allow-nonexistent-resources
+/subsystem=datasources/jdbc-driver=${GOVPAY_DB_TYPE:-hsql}Driver:add(driver-name=${GOVPAY_DB_TYPE:-hsql}Driver, driver-module-name=govpayJDBCMod, driver-class-name=${GOVPAY_DS_DRIVER_CLASS})
 stop-embedded-server
 embed-server --server-config=standalone.xml --std-out=echo
 echo "Preparo datasource govpay"

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 function printHelp() {
 echo "Usage $(basename $0) [ -t <repository>:<tagname> | <Installer Sorgente> | <Personalizzazioni> | <Avanzate> | -h ]"
@@ -14,7 +14,7 @@ Installer Sorgente:
 -j             : Usa l'installer prodotto dalla pipeline jenkins https://jenkins.link.it/govpay/risultati-testsuite/installer/govpay-installer-<version>.tgz
 
 Personalizzazioni:
--d <TIPO>      : Prepara l'immagine per essere utilizzata su un particolare database  (valori: [ hsql, postgresql, mysql, oracle] , default: hsql)
+-d <TIPO>      : Prepara l'immagine per essere utilizzata su un particolare database  (valori: [ hsql, postgresql, mysql, mariadb, oracle] , default: hsql)
 -e <PATH>      : Imposta il path interno utilizzato per i file di configurazione di govpay 
 -f <PATH>      : Imposta il path interno utilizzato per i log di govpay
 
@@ -49,7 +49,7 @@ while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
     t) TAG="$OPTARG"; NO_COLON=${TAG//:/}
       [ ${#TAG} -eq ${#NO_COLON} -o "${TAG:0:1}" == ':' -o "${TAG:(-1):1}" == ':' ] && { echo "Il tag fornito \"$TAG\" non utilizza la sintassi <repository>:<tagname>"; exit 2; } ;;
     v) VER="$OPTARG"; [ -n "$BRANCH" ] && { echo "Le opzioni -v e -b sono incompatibili. Impostare solo una delle due."; exit 2; } ;;
-    d) DB="${OPTARG}"; case "$DB" in hsql);;postgresql);;mysql);;oracle);;*) echo "Database non supportato: $DB"; exit 2;; esac ;;
+    d) DB="${OPTARG}"; case "$DB" in hsql);;postgresql);;mysql);;mariadb);;oracle);;*) echo "Database non supportato: $DB"; exit 2;; esac ;;
     l) LOCALFILE="$OPTARG"
         [ ! -f "${LOCALFILE}" ] && { echo "Il file indicato non esiste o non e' raggiungibile [${LOCALFILE}]."; exit 3; } 
        ;;
@@ -90,7 +90,6 @@ cp -fr commons buildcontext/
 
 DOCKERBUILD_OPT=()
 DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_fullversion=${VER:-3.6.0}")
-[ -n "${DB}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_database_vendor=${DB}")
 [ -n "${TEMPLATE}" ] &&  cp -f "${TEMPLATE}" buildcontext/commons/
 [ -n "${CUSTOM_GOVPAY_HOME}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_home=${CUSTOM_GOVPAY_HOME}")
 [ -n "${CUSTOM_GOVPAY_LOG}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_log=${CUSTOM_GOVPAY_LOG}")
@@ -112,6 +111,15 @@ else
   INSTALLER_DOCKERFILE="govpay/Dockerfile.github"
 fi
 
+if [ -n "${DB}" ]
+then
+  if [ "${DB}" == 'mariadb' ]
+  then
+    DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_database_vendor=mysql")
+  else
+    DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_database_vendor=${DB}")
+  fi
+fi
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
   -t linkitaly/govpay-installer_${DB:-hsql}:${VER:-3.6.0} \
@@ -119,6 +127,11 @@ fi
 RET=$?
 [ ${RET} -eq  0 ] || exit ${RET}
  
+if [ "${DB}" == 'mariadb' ]
+then
+  unset  DOCKERBUILD_OPTS[-1]
+  DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} "govpay_database_vendor=mariadb")
+fi
 # Build imagine govpay
 
 if [ -z "$TAG" ] 
@@ -130,8 +143,7 @@ then
   case "${DB:-hsql}" in
   hsql) TAG="${REPO}:${TAGNAME}" ;;
   postgresql) TAG="${REPO}:${TAGNAME}_postgres" ;;
-  mysql) TAG="${REPO}:${TAGNAME}_mysql" ;;
-  oracle) TAG="${REPO}:${TAGNAME}_oracle" ;;
+  *) TAG="${REPO}:${TAGNAME}_${DB}" ;;
   esac
 fi
 
@@ -141,11 +153,11 @@ then
   DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "wildfly_custom_scripts=custom_widlfly_cli")
 fi
 
-if [ -n "${CUSTOM_JDBC_JAR}" ]
-then
-  cp -r ${CUSTOM_JDBC_JAR}/ buildcontext/custom_jdbc_jar
-  DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "jdbc_custom_jar=custom_jdbc_jar")
-fi
+# if [ -n "${CUSTOM_JDBC_JAR}" ]
+# then
+#   cp -r ${CUSTOM_JDBC_JAR}/ buildcontext/custom_jdbc_jar
+#   DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "jdbc_custom_jar=custom_jdbc_jar")
+# fi
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
   --build-arg source_image=linkitaly/govpay-installer_${DB:-hsql} \
@@ -193,6 +205,33 @@ EOYAML
         - POSTGRES_USER=govpay
         - POSTGRES_PASSWORD=govpay
 EOYAML
+  elif [ "${DB:-hsql}" == 'mariadb' ]
+  then
+    cat - << EOYAML >> compose/docker-compose.yaml
+        # Il driver deve essere compiato manualmente nella directory corrente
+        - ./mariadb-java-client-3.0.6.jar:/tmp/mariadb-java-client-3.0.6.jar 
+    environment:
+        - GOVPAY_DB_SERVER=my_govpay_${SHORT}
+        - GOVPAY_DB_NAME=govpaydb
+        - GOVPAY_DB_USER=govpay
+        - GOVPAY_DB_PASSWORD=govpay
+        - GOVPAY_MARIADB_JDBC_PATH=/tmp/mariadb-java-client-3.0.6.jar
+        - GOVPAY_POP_DB_SKIP=false
+  database:
+    container_name: my_govpay_${SHORT}
+    image: mariadb:10.6
+    environment:
+      - MARIADB_DATABASE=govpaydb
+      - MARIADB_USER=govpay
+      - MARIADB_PASSWORD=govpay
+      - MARIADB_ROOT_PASSWORD=my-secret-pw
+    ports:
+       - 3306:3306
+EOYAML
+    echo 
+    echo "ATTENZIONE: Copiare il driver jdbc Mysql 'mariadb-java-client-3.0.6.jar' dentro la directory './compose/'"
+    echo
+    echo "ATTENZIONE: Copiare il driver jdbc Oracle 'mariadb-java-client-3.0.6.jar' dentro la directory './compose/'" > compose/README.first
   elif [ "${DB:-hsql}" == 'mysql' ]
   then
     cat - << EOYAML >> compose/docker-compose.yaml
@@ -207,12 +246,12 @@ EOYAML
         - GOVPAY_POP_DB_SKIP=false
   database:
     container_name: my_govpay_${SHORT}
-    image: mariadb:10.6
+    image: mysql:8.0
     environment:
-      - MARIADB_DATABASE=govpaydb
-      - MARIADB_USER=govpay
-      - MARIADB_PASSWORD=govpay
-      - MARIADB_ROOT_PASSWORD=my-secret-pw
+      - MYSQL_DATABASE=govpaydb
+      - MYSQL_USER=govpay
+      - MYSQL_PASSWORD=govpay
+      - MYSQL_ROOT_PASSWORD=my-secret-pw
     ports:
        - 3306:3306
 EOYAML
@@ -220,6 +259,7 @@ EOYAML
     echo "ATTENZIONE: Copiare il driver jdbc Mysql 'mysql-connector-java-8.0.29.jar' dentro la directory './compose/'"
     echo
     echo "ATTENZIONE: Copiare il driver jdbc Oracle 'mysql-connector-java-8.0.29.jar' dentro la directory './compose/'" > compose/README.first
+
 
   elif [ "${DB:-hsql}" == 'oracle' ]
   then

@@ -47,17 +47,22 @@ do
     case "${GOVPAY_DB_TYPE:-hsql}" in
     oracle)
         [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=1521
-        JDBC_URL="jdbc:oracle:thin:@${ORACLE_JDBC_SERVER_PREFIX}${SERVER_HOST}:${SERVER_PORT}${ORACLE_JDBC_DB_SEPARATOR}${DBNAME}"
+        JDBC_URL="jdbc:oracle:thin:@${ORACLE_JDBC_SERVER_PREFIX}${SERVER_HOST}:${SERVER_PORT}${ORACLE_JDBC_DB_SEPARATOR}${DBNAME}${DATASOURCE_CONN_PARAM}"
         START_TRANSACTION=""
     ;;
     postgresql) 
         [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=5432
-        JDBC_URL="jdbc:postgresql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}"
+        JDBC_URL="jdbc:postgresql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${DATASOURCE_CONN_PARAM}"
         START_TRANSACTION="START TRANSACTION;"
     ;;
     mysql) 
         [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=3306
-        JDBC_URL="jdbc:mysql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}"
+        JDBC_URL="jdbc:mysql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${DATASOURCE_CONN_PARAM}"
+        START_TRANSACTION="START TRANSACTION;"
+    ;;
+    mariadb) 
+        [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=3306
+        JDBC_URL="jdbc:mariadb://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${DATASOURCE_CONN_PARAM}"
         START_TRANSACTION="START TRANSACTION;"
     ;;
     hsql|*)
@@ -122,7 +127,7 @@ EOSQLTOOL
         EXIST_QUERY="SELECT count(table_name) FROM all_tables WHERE  LOWER(table_name)='${DBINFO,,}' AND LOWER(owner)='${DBUSER,,}';" 
         ;;
         *)         
-        EXIST_QUERY="SELECT count(table_name) FROM information_schema.tables WHERE LOWER(table_name)='${DBINFO,,}' and (LOWER(table_catalog)='${DBNAME,,}' or LOWER(table_catalog)='public' );" 
+        EXIST_QUERY="SELECT count(table_name) FROM information_schema.tables WHERE LOWER(table_name)='${DBINFO,,}' and (LOWER(table_schema)='${DBNAME,,}' or LOWER(table_schema)='public' );" 
         ;;
         hsql|*)
         ;;
@@ -141,7 +146,7 @@ EOSQLTOOL
                 sleep ${GOVPAY_READY_DB_CHECK_SKIP_SLEEP_TIME}
             fi
         done
-        if [ ${DB_READY} -ne 0 -a ${NUM_RETRY} -lt ${GOVPAY_READY_DB_CHECK_MAX_RETRY}  ]
+        if [ ${DB_READY} -ne 0 -a ${NUM_RETRY} -eq ${GOVPAY_READY_DB_CHECK_MAX_RETRY}  ]
         then
             echo "FATAL: Readyness base dati ${DESTINAZIONE} ... Base dati NON disponibile dopo $(( ${GOVPAY_READY_DB_CHECK_SKIP_SLEEP_TIME} * ${GOVPAY_READY_DB_CHECK_MAX_RETRY} ))secondi"
 		    exit 1
@@ -173,8 +178,10 @@ EOSQLTOOL
                 #
                 # Ignoro in caso il file SQL non esista
                 #
-                [ ! -f /opt/${GOVPAY_DB_TYPE:-hsql}/gov_pay${SUFFISSO}.sql ] && continue
-                /bin/cp -f /opt/${GOVPAY_DB_TYPE:-hsql}/gov_pay${SUFFISSO}*.sql /var/tmp/${GOVPAY_DB_TYPE:-hsql}/
+                INSTALLER_SQL_DIR="${GOVPAY_DB_TYPE:-hsql}"
+                [ "${GOVPAY_DB_TYPE:-hsql}" == 'mariadb' ] && INSTALLER_SQL_DIR='mysql'
+                [ ! -f /opt/${INSTALLER_SQL_DIR}/gov_pay${SUFFISSO}.sql ] && continue
+                /bin/cp -f /opt/${INSTALLER_SQL_DIR}/gov_pay${SUFFISSO}*.sql /var/tmp/${GOVPAY_DB_TYPE:-hsql}/
                 #
                 # Elimino la creazione di tabelle comuni se il database e' utilizzato per piu funzioni (evita errore tabella gia' esistente)
                 #
@@ -195,9 +202,9 @@ EOSQLTOOL
                 #     fi
                 # fi
                 #
-                # Aggiusto l'SQL per il database mysql 
+                # Aggiusto l'SQL per il database mysql e mariadb 
                 #
-                if [ "${GOVPAY_DB_TYPE:-hsql}" == 'mysql' ]
+                if [ "${GOVPAY_DB_TYPE:-hsql}" == 'mysql' -o "${GOVPAY_DB_TYPE:-hsql}" == 'mariadb' ]
                 then
                     # I COMMENT delle colonne e delle tabelle contengono il carattere apice con escape; "\'"
                     # sembra che questo causi dei problemi nell'interpretare corettamente lo script al client 

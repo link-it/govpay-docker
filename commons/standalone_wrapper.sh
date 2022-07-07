@@ -16,7 +16,7 @@ declare -r CUSTOM_INIT_FILE="${JBOSS_HOME}/standalone/configuration/custom_wildl
 
     
 case "${GOVPAY_DB_TYPE:-hsql}" in
-postgresql|mysql|oracle)
+postgresql|mysql|mariadb|oracle)
 
     #
     # Sanity check variabili minime attese
@@ -34,17 +34,74 @@ GOVPAY_DB_PASSWORD: ${GOVPAY_DB_NAME:+xxxxx}
 "
         exit 1
     fi
-    if [ "${GOVPAY_DB_TYPE:-hsql}" == 'mysql' ]
-    then
+
+    # Setting valori di Default per i datasource GOVPAY
+
+
+    # Settaggio Valori per i parametri dei datasource GOVPAY
+
+    ## parametri di connessione URL JDBC (default vuoto)
+    [ -n "${GOVPAY_DS_CONN_PARAM}" ] &&  export DATASOURCE_CONN_PARAM="?${GOVPAY_DS_CONN_PARAM}"
+
+
+    case "${GOVPAY_DB_TYPE:-hsql}" in
+    postgresql)
+        if [ -z "${GOVPAY_POSTGRESQL_JDBC_PATH}" -o ! -f "${GOVPAY_POSTGRESQL_JDBC_PATH}" ]
+        then
+            echo "FATAL: Sanity check jdbc mysql ... fallito."
+            echo "FATAL: Il path al driver jdbc postgresql, non è stato indicato o non è leggibile: [GOVPAY_POSTGRESQL_JDBC_PATH=${GOVPAY_POSTGRESQL_JDBC_PATH}] "
+            exit 1
+        fi
+        export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/postgresql-jdbc.jar"
+        export GOVPAY_DS_DRIVER_CLASS='org.postgresql.Driver'
+        export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
+        export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+        rm -rf "${GOVPAY_DRIVER_JDBC}"
+        cp "${GOVPAY_POSTGRESQL_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
+
+    ;;
+    mysql)
         if [ -z "${GOVPAY_MYSQL_JDBC_PATH}" -o ! -f "${GOVPAY_MYSQL_JDBC_PATH}" ]
         then
             echo "FATAL: Sanity check jdbc mysql ... fallito."
             echo "FATAL: Il path al driver jdbc mysql, non è stato indicato o non è leggibile: [GOVPAY_MYSQL_JDBC_PATH=${GOVPAY_MYSQL_JDBC_PATH}] "
             exit 1
         fi
-    fi
-    if [ "${GOVPAY_DB_TYPE:-hsql}" == 'oracle' ]
-    then
+        if [ -n "${DATASOURCE_CONN_PARAM}" ]
+        then
+            DATASOURCE_CONN_PARAM="${DATASOURCE_CONN_PARAM}&zeroDateTimeBehavior=convertToNull"
+        else
+            DATASOURCE_CONN_PARAM='?zeroDateTimeBehavior=convertToNull'
+        fi
+        export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/mysql-jdbc.jar"
+        export GOVPAY_DS_DRIVER_CLASS='com.mysql.cj.jdbc.Driver'
+        export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
+        export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.MySQL57Dialect
+        rm -rf "${GOVPAY_DRIVER_JDBC}"
+        cp "${GOVPAY_MYSQL_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
+    ;;
+    mariadb)
+        if [ -z "${GOVPAY_MARIADB_JDBC_PATH}" -o ! -f "${GOVPAY_MARIADB_JDBC_PATH}" ]
+        then
+            echo "FATAL: Sanity check jdbc mariadb ... fallito."
+            echo "FATAL: Il path al driver jdbc mariadb, non è stato indicato o non è leggibile: [GOVPAY_MARIADB_JDBC_PATH=${GOVPAY_MYSQL_JDBC_PATH}] "
+            exit 1
+        fi
+        if [ -n "${DATASOURCE_CONN_PARAM}" ]
+        then
+            DATASOURCE_CONN_PARAM="${DATASOURCE_CONN_PARAM}&zeroDateTimeBehavior=convertToNull"
+        else
+            DATASOURCE_CONN_PARAM='?zeroDateTimeBehavior=convertToNull'
+        fi
+        export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/mariadb-jdbc.jar"
+        export GOVPAY_DS_DRIVER_CLASS='org.mariadb.jdbc.Driver'
+        export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
+        export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.MySQL57Dialect
+        rm -rf "${GOVPAY_DRIVER_JDBC}"
+        cp "${GOVPAY_MARIADB_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
+    ;;
+
+    oracle)
         if [ -z "${GOVPAY_ORACLE_JDBC_PATH}" -o ! -f "${GOVPAY_ORACLE_JDBC_PATH}" ]
         then
             echo "FATAL: Sanity check jdbc oracle ... fallito."
@@ -58,33 +115,7 @@ GOVPAY_DB_PASSWORD: ${GOVPAY_DB_NAME:+xxxxx}
             echo "       Valori consentiti: [ servicename , sid ]"
             exit 1
         fi
-    fi
-    # Setting valori di Default per i datasource GOVPAY
-
-
-    # Settaggio Valori per i parametri dei datasource GOVPAY
-
-    ## parametri di connessione URL JDBC (default vuoto)
-    [ -n "${GOVPAY_DS_CONN_PARAM}" ] &&  export DATASOURCE_CONN_PARAM="?${GOVPAY_DS_CONN_PARAM}"
-
-
-    case "${GOVPAY_DB_TYPE:-hsql}" in
-    postgresql)
-        export GOVPAY_DRIVER_JDBC="/opt/postgresql-${POSTGRES_JDBC_VERSION}.jar"
-        export GOVPAY_DS_DRIVER_CLASS='org.postgresql.Driver'
-        export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
-        export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
-    ;;
-    mysql)
-        export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/mysqlMod/main/mysql-jdbc.jar"
-        export GOVPAY_DS_DRIVER_CLASS='com.mysql.cj.jdbc.Driver'
-        export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
-        export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.MySQL57Dialect
-        rm -rf "${GOVPAY_DRIVER_JDBC}"
-        cp "${GOVPAY_MYSQL_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
-    ;;
-    oracle)
-        export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/oracleMod/main/oracle-jdbc.jar"
+        export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/oracle-jdbc.jar"
         export GOVPAY_DS_DRIVER_CLASS='oracle.jdbc.OracleDriver'
         export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1 FROM DUAL'
         export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.Oracle10gDialect
