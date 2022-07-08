@@ -43,13 +43,13 @@ docker run \
   -v ~/govpay_log:/var/log/govpay -v ~/govpay_conf:/etc/govpay \
   -e GOVPAY_POP_DB_SKIP=false \
   -p 8080:8080 \
-  -p 8081:8081 \
-  -p 8082:8082 \
+  -p 8443:8443 \
+  -p 8445:8445 \
 linkitaly/govpay:3.6.0
 
 ```
 
-In modalità orchestrate al termine delle operazioni di build, lo script predispone uno scenario di test avviabile con docker-compose, all'interno della directory **"compose"**; lo scenario di test può quindi essere avviato come segue:
+In modalità orchestrate al termine delle operazioni di build, lo script predispone uno scenario di test avviabile con docker-compose, all'interno della directory **"compose"**. Ad esempio lo scenario di test per una immagine preparata per database PostgreSQL, può quindi essere avviato come segue:
 
 ```
 ./build_image.sh -d postgresql
@@ -58,8 +58,28 @@ cd compose
 docker-compose up
 ```
 
-Sotto la directory compose vengono create le sottodirectories **govpay_conf** e **govpay_log**, su cui il container montera' i path _**/etc/govpay**_ ed _**/var/log/govpay**_  rispettivamente.
-L'accesso è previsto in protocollo HTTP sulle porte _**8080, 8081, 8082**_ .
+## Driver JDBC
+Tutte le immagini create in modalità orchestrate sono distribuite senza il necessario driver JDBC, che quindi deve essere obbligatoriamente fornito all'avvio tramite un volume montato sul container; inoltre il path sul filesystem del container, da cui leggere il driver deve essere specificato tramite una delle segeuntei variabili'dambiente:
+
+* GOVPAY_POSTGRESQL_JDBC_PATH
+* GOVPAY_MYSQL_JDBC_PATH
+* GOVPAY_MARIADB_JDBC_PATH
+* GOVPAY_ORACLE_JDBC_PATH
+
+Ad esempio: 
+
+```shell
+docker run \
+  -v ~/govpay_log:/var/log/govpay -v ~/govpay_conf:/etc/govpay \
+  -v $PWD/postgresql-42.4.0.jar:/tmp/postgresql-42.4.0.jar \
+  -e GOVPAY_POSTGRESQL_JDBC_PATH=/tmp/postgresql-42.4.0.jar \
+  -e GOVPAY_POP_DB_SKIP=false \
+  -p 8080:8080 \
+  -p 8443:8443 \
+  -p 8445:8445 \
+linkitaly/govpay:3.6.0
+
+```
 
 ## Informazioni di Base
 
@@ -86,21 +106,35 @@ CONTAINER_ID=$(docker create linkitaly/govpay:3.6.0_postgres)
 docker cp ${CONTAINER_ID}:/opt/postgresql .
 ```
 
-Le immagini prodotte utilizzano come application server ospite WildFly 18.0.1.Final, in ascolto sia in protocollo _**AJP**_ sulla porta **8009** sia in _**HTTP**_ su 3 porte in modo da gestire il traffico su ogni porta, con un listener dedicato:
-- **8080**: Listener dedicato al traffico in ingresso (max-thread-pool default: 100)
-- **8081**: Listener dedicato al traffico in uscita (max-thread-pool default: 100)
-- **8082**: Listener dedicato al traffico di gestione (max-thread-pool default: 20)
+Le immagini prodotte utilizzano come application server ospite WildFly 18.0.1.Final, in ascolto sia in protocollo _**AJP**_ sulla porta **8009** sia in _**HTTP**_ su 3 porte per gestire il traffico nelle seguenti modalità:
+- **8080**: Listener HTTP ingresso (max-thread-pool default: 100)
+- **8443**: Listener HTTPS (max-thread-pool default: 100)
+- **8445**: Listener HTTPS con mutua autenticazione obbligatoria (max-thread-pool default: 100)
 
 Tutte queste porte sono esposte dal container e per accedere ai servizi dall'esterno, si devono pubblicare al momento dell'avvio del immagine. 
 La dashboard di monitoraggio e configurazione è disponibile alla URL:
 
 ```
- http://<indirizzo IP>:8082/govpay/backend/gui/backoffice
+ http://<indirizzo IP>:8080/govpay/backend/gui/backoffice
 ```
 L'account di default per l'accesso:
  * username: gpadmin
  * password: Password1!
 
+### Connettività HTTPS e keystores
+I connettori HTTPS configurati all'avvio necessitano di un certificato da esporre, per questo all'interno dell'immagine è presente un keystore contenente un certificato selfsigned al path ${JBOSS_HOME}/standalone/configuration/testkeystore.jks.
+Il keystore è utilizzabile solamente a scopo di test, mentre in situazioni reali è preferibile sostiturlo con un keystore contenente chiave primaria e certificato firmato da una Certification Authority pubblica. Per farlo è sufficiente montare sul container il path contenete il keystore da utilizzare e popolare le segeunti variabili d'ambiente:
+
+* WILDFLY_KEYSTORE: Path al keystore contenente chiave primaria e relativo certificato da utilizzare sui connettori HTTPS
+* WILDFLY_KEYSTORE_PASSWORD: Password di accesso al keystore 
+* WILDFLY_KEYSTORE_KEY_PASSWORD: Password della chiave privata (se non specificata viene utilizzato il valore di WILDFLY_KEYSTORE_PASSWORD)
+* WILDFLY_KEYSTORE_TIPO: formato del file keystore (valori ammessi: JKS,PKCS12 - default: JKS)
+
+Il connettore HTTPS con mutua autenticazione necessita anche di un truststore contenente i certificati delle CA da utilizzare per il trust dei certificati client. Per configurarlo sul container è sufficiente montare sul container il path contenete il keystore da utilizzare e popolare le segeunti variabili d'ambiente:
+
+* WILDFLY_TRUSTSTORE: Path al truststore contenente i certificati CA da utilizzare per il trust sul connttore HTTPS con mutua autenticazione
+* WILDFLY_TRUSTSTORE_PASSWORD: Password di accesso al truststore 
+* WILDFLY_TRUSTSTORE_TIPO: formato del file truststore (valori ammessi: JKS,PKCS12 - default: JKS)
 
 ## Personalizzazioni
 Attraverso l'impostazione di alcune variabili d'ambiente note è possibile personalizzare alcuni aspetti del funzionamento del container. Le variabili supportate al momento sono queste:
@@ -140,12 +174,7 @@ E' possibile personalizzare il ciclo di controllo di avvio di govpay impostando 
 * GOVPAY_DB_NAME: Nome del database (obbligatorio in modalita orchestrate)
 * GOVPAY_DB_USER: username da utiliizare per l'accesso al database (obbligatorio in modalita orchestrate)
 * GOVPAY_DB_PASSWORD: password di accesso al database (obbligatorio in modalita orchestrate)
-#### Driver JDBC
-path sul filesystem del container, al driver jdbc da utilizzare (obbligatorio: deve essere obbligatoriamente montato come volume all'avvio)
-* GOVPAY_POSTGRESQL_JDBC_PATH
-* GOVPAY_MYSQL_JDBC_PATH
-* GOVPAY_MARIADB_JDBC_PATH
-* GOVPAY_ORACLE_JDBC_PATH
+
 
 #### Connessione a database Oracle ####
 Quando ci si connette ad un database esterno Oracle devono essere indicate anche le seguenti variabili d'ambiente
@@ -161,34 +190,9 @@ Quando ci si connette ad un database esterno Oracle devono essere indicate anche
 * GOVPAY_DS_CONN_PARAM: parametri JDBC aggiuntivi (default: vuoto)
 * GOVPAY_DS_PSCACHESIZE: dimensione della cache usata per le prepared statements (default: 20)
 
-Se è stata utilizzata la suddivisione dei dati su piu' database, è possibile in aggiunta al set di variabili indicato in precedenza, fornire uno o più di quelli indicati di seguito:  
-
-CONFIGURAZIONE
-* GOVPAY_CONF_MAX_POOL (default: 10)
-* GOVPAY_CONF_MIN_POOL (default: 2)
-* GOVPAY_CONF_DS_BLOCKING_TIMEOUT (default: 30000)
-* GOVPAY_CONF_DS_CONN_PARAM (default: vuoto)
-* GOVPAY_CONF_DS_IDLE_TIMEOUT (default: 5)
-* GOVPAY_CONF_DS_PSCACHESIZE (default: 20)
-
-STATISTICHE
-* GOVPAY_STAT_MAX_POOL (default: 5)
-* GOVPAY_STAT_MIN_POOL (default: 1)
-* GOVPAY_STAT_DS_BLOCKING_TIMEOUT (default: 30000)
-* GOVPAY_STAT_DS_CONN_PARAM (default: vuoto)
-* GOVPAY_STAT_DS_IDLE_TIMEOUT (default: 5)
-* GOVPAY_STAT_DS_PSCACHESIZE (default: 20)
-
-TRACCIAMENTO
-* GOVPAY_TRAC_MAX_POOL (default: 50)
-* GOVPAY_TRAC_MIN_POOL (default: 2)
-* GOVPAY_TRAC_DS_BLOCKING_TIMEOUT (default: 30000)
-* GOVPAY_TRAC_DS_CONN_PARAM (default: vuoto)
-* GOVPAY_TRAC_DS_IDLE_TIMEOUT (default: 5)
-* GOVPAY_TRAC_DS_PSCACHESIZE (default: 20)
-
 ### Pooling connessioni Http
 I listener HTTP configurati sul wildfly possono 
-* WILDFLY_HTTP_IN_WORKER-MAX-THREADS: impostazione del numero massimo di thread, sul worker del listener traffico in erogazione, (default: 100)
-* WILDFLY_HTTP_OUT_WORKER-MAX-THREADS: impostazione del numero massimo di thread, sul worker del listener traffico in fruizione, (default: 100)
-* WILDFLY_HTTP_GEST_WORKER-MAX-THREADS: impostazione del numero massimo di thread, sul worker del listener traffico di gestione, (default: 20)
+* WILDFLY_AJP_WORKER-MAX-THREADS: impostazione del numero massimo di thread, sul worker del listener AJP, (default: 50)
+* WILDFLY_HTTP_WORKER-MAX-THREADS: impostazione del numero massimo di thread, sul worker del listener HTTP, (default: 20)
+* WILDFLY_HTTPS_WORKER-MAX-THREADS: impostazione del numero massimo di thread, sul worker del listener HTTPS, (default: 100)
+* WILDFLY_HTTPS_CLIENTAUTH_WORKER-MAX-THREADS: impostazione del numero massimo di thread, sul worker del listener HTTPS con mutua autenticazione, (default: 100)
