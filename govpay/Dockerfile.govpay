@@ -80,7 +80,7 @@ echo "Aggiungo Workers https" \n\
 /subsystem=io/worker=worker_clientauth:add(task-max-threads=${env.WILDFLY_HTTPS_CLIENTAUTH_WORKER-MAX-THREADS:100}) \n\
 /subsystem=io/worker=worker_https:add(task-max-threads=${env.WILDFLY_HTTPS_WORKER-MAX-THREADS:100}) \n\
 echo "Aggiungo Workers http" \n\
-/subsystem=io/worker=http-in-worker:add(task-max-threads=${env.WILDFLY_HTTP_IN_WORKER-MAX-THREADS:20}) \n\
+/subsystem=io/worker=http-in-worker:add(task-max-threads=${env.WILDFLY_HTTP_WORKER-MAX-THREADS:20}) \n\
 /subsystem=undertow/server=default-server/http-listener=default:write-attribute(name=worker, value=http-in-worker) \n\
 echo "Aggiungo Worker e Listener ajp" \n\
 /subsystem=io/worker=ajp-worker:add(task-max-threads=${env.WILDFLY_AJP_WORKER-MAX-THREADS:50}) \n\
