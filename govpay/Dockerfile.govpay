@@ -75,28 +75,38 @@ ENV GOVPAY_DB_TYPE=${govpay_database_vendor}
 # RUN [ -d /var/tmp/jdbc_custom_jar ] || echo "Driver jdbc Custom non presente"
 
 RUN echo -e 'embed-server --server-config=standalone.xml --std-out=echo \n\
+echo "Aggiungo Workers https" \n\
+/socket-binding-group=standard-sockets/socket-binding=https_clientauth:add(port=${jboss.https_clientauth.port:8445}) \n\
+/subsystem=io/worker=worker_clientauth:add(task-max-threads=${env.WILDFLY_HTTPS_CLIENTAUTH_WORKER-MAX-THREADS:100}) \n\
+/subsystem=io/worker=worker_https:add(task-max-threads=${env.WILDFLY_HTTPS_WORKER-MAX-THREADS:100}) \n\
 echo "Aggiungo Workers http" \n\
-/subsystem=io/worker=http-in-worker:add(task-max-threads=${env.WILDFLY_HTTP_IN_WORKER-MAX-THREADS:100}) \n\
+/subsystem=io/worker=http-in-worker:add(task-max-threads=${env.WILDFLY_HTTP_IN_WORKER-MAX-THREADS:20}) \n\
 /subsystem=undertow/server=default-server/http-listener=default:write-attribute(name=worker, value=http-in-worker) \n\
-/subsystem=io/worker=http-out-worker:add(task-max-threads=${env.WILDFLY_HTTP_OUT_WORKER-MAX-THREADS:100}) \n\
-/socket-binding-group=standard-sockets/socket-binding=http-out:add(port=${jboss.http.out.port:8081}) \n\
-/subsystem=undertow/server=default-server/http-listener=fruizioni:add(socket-binding=http-out,  worker=http-out-worker) \n\
-/subsystem=io/worker=http-gest-worker:add(task-max-threads=${env.WILDFLY_HTTP_GEST_WORKER-MAX-THREADS:20}) \n\
-/socket-binding-group=standard-sockets/socket-binding=http-gest:add(port=${jboss.http.gest.port:8082}) \n\
-/subsystem=undertow/server=default-server/http-listener=gestione:add(socket-binding=http-gest, worker=http-gest-worker) \n\
 echo "Aggiungo Worker e Listener ajp" \n\
 /subsystem=io/worker=ajp-worker:add(task-max-threads=${env.WILDFLY_AJP_WORKER-MAX-THREADS:50}) \n\
 /subsystem=undertow/server=default-server/ajp-listener=ajplistener:add(socket-binding=ajp, scheme=http, worker=ajp-worker) \n\
-echo "Abilito utilizzo degli header X-Forwarding" \n\
-/subsystem=undertow/server=default-server/http-listener=default:write-attribute(name=proxy-address-forwarding,value=true) \n\
+echo "Configuro gli SSLContext" \n\
+/subsystem=elytron/key-store=pagopakeystore:add(path=${env.WILDFLY_KEYSTORE},credential-reference={clear-text=${env.WILDFLY_KEYSTORE_PASSWORD}},type=${env.WILDFLY_KEYSTORE_TIPO:JKS}) \n\
+/subsystem=elytron/key-manager=pagopakeymanager:add(key-store=pagopakeystore,credential-reference={clear-text=${env.WILDFLY_KEYSTORE_KEY_PASSWORD}}) \n\
+/subsystem=elytron/key-store=pagopatruststore:add(path=${env.WILDFLY_TRUSTSTORE},credential-reference={clear-text=${env.WILDFLY_TRUSTSTORE_PASSWORD}},type=${env.WILDFLY_TRUSTSTORE_TIPO:JKS}) \n\
+/subsystem=elytron/trust-manager=pagopatrustmanager:add(key-store=pagopatruststore) \n\
+/subsystem=elytron/server-ssl-context=clientAuthSSLContext:add(key-manager=pagopakeymanager, trust-manager=pagopatrustmanager,protocols=["TLSv1.2"],need-client-auth=true) \n\
+/subsystem=elytron/server-ssl-context=defaultSSLContext:add(key-manager=pagopakeymanager,protocols=["TLSv1.2"]) \n\
 echo "Rimuovo connettore https" \n\
 /subsystem=undertow/server=default-server/https-listener=https:remove() \n\
+echo "Aggiungo connettori https" \n\
+/subsystem=undertow/server=default-server/https-listener=https_clientauth:add(worker=worker_clientauth,ssl-context=clientAuthSSLContext,socket-binding=https_clientauth,enable-http2=true) \n\
+/subsystem=undertow/server=default-server/https-listener=https:add(ssl-context=defaultSSLContext,socket-binding=https,enable-http2=true,worker=worker_https) \n\
+echo "Abilito utilizzo degli header X-Forwarding" \n\
+/subsystem=undertow/server=default-server/http-listener=default:write-attribute(name=proxy-address-forwarding,value=true) \n\
+/subsystem=undertow/server=default-server/https-listener=https:write-attribute(name=proxy-address-forwarding,value=true) \n\
+/subsystem=undertow/server=default-server/https-listener=https_clientauth:write-attribute(name=proxy-address-forwarding,value=true) \n\
 echo "Abilitazione Non standard wrapper" \n\
 /subsystem=undertow/servlet-container=default:write-attribute(name=allow-non-standard-wrappers, value=true) \n\
 echo "Correggo max post size" \n\
 /subsystem=undertow/server=default-server/http-listener=default:write-attribute(name=max-post-size , value=${env.WILDFLY_MAX-POST-SIZE:25485760}) \n\
-/subsystem=undertow/server=default-server/http-listener=fruizioni:write-attribute(name=max-post-size , value=${env.WILDFLY_MAX-POST-SIZE:25485760}) \n\
-/subsystem=undertow/server=default-server/http-listener=gestione:write-attribute(name=max-post-size , value=${env.WILDFLY_MAX-POST-SIZE:25485760}) \n\
+/subsystem=undertow/server=default-server/https-listener=https:write-attribute(name=max-post-size , value=${env.WILDFLY_MAX-POST-SIZE:25485760}) \n\
+/subsystem=undertow/server=default-server/https-listener=https_clientauth:write-attribute(name=max-post-size , value=${env.WILDFLY_MAX-POST-SIZE:25485760}) \n\
 /subsystem=undertow/server=default-server/ajp-listener=ajplistener:write-attribute(name=max-post-size, value=${env.WILDFLY_MAX-POST-SIZE:25485760}) \n\
 echo "Abilitazione Acces Log"\n\
 /subsystem=undertow/server=default-server/host=default-host/setting=access-log:add(pattern="%A %t %h %l %u %r %s %b %T %I", directory="${env.GOVPAY_LOGDIR}", prefix=access, suffix=".log") \n\
@@ -107,6 +117,8 @@ stop-embedded-server \n\
 ' > /tmp/govpay_standalone_configuration.cli \
 && chmod 750 ${JBOSS_HOME}/bin/config_datasource.sh \
 && ${JBOSS_HOME}/bin/config_datasource.sh /tmp/govpay_standalone_configuration.cli \
+&& keytool -genkey -alias test_govpay -keystore ${JBOSS_HOME}/standalone/configuration/testkeystore.jks  -storepass '123456' -keypass '123456'  -keyalg RSA -keysize 2048 -validity 10950  -dname "CN=test.govpay.it,C=IT" \
+&& export WILDFLY_KEYSTORE=${JBOSS_HOME}/standalone/conf/testkeystore.jks WILDFLY_KEYSTORE_PASSWORD=123456 WILDFLY_TRUSTSTORE=${JBOSS_HOME}/standalone/conf/testkeystore.jks WILDFLY_TRUSTSTORE_PASSWORD=123456 WILDFLY_KEYSTORE_KEY_PASSWORD=123456 \
 && ${JBOSS_HOME}/bin/jboss-cli.sh --file=/tmp/govpay_standalone_configuration.cli \
 && rm -rf ${JBOSS_HOME}/standalone/{data,log,configuration/standalone_xml_history} \
 /tmp/govpay_standalone_configuration.cli
@@ -174,5 +186,5 @@ ENV GOVPAY_DB_TYPE=${govpay_database_vendor}
 COPY --from=source_image_setup --chown=wildfly:0 /opt/ /opt/
 COPY --from=source_image_installer --chown=wildfly:0 /opt/govpay-installer-${GOVPAY_FULLVERSION}/dist/cfg/* ${GOVPAY_HOME}/
 USER wildfly
-EXPOSE 8080 8081 8082 8009
+EXPOSE 8080 8443 8445 8009
 ENTRYPOINT [ "/opt/wildfly-18.0.1.Final/bin/standalone_wrapper.sh" , "-b", "0.0.0.0" ]

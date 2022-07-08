@@ -14,7 +14,7 @@ declare -r ENTRYPOINT_D='/docker-entrypoint-widlflycli.d/'
 declare -r CUSTOM_INIT_FILE="${JBOSS_HOME}/standalone/configuration/custom_wildlfy_init"
 
 
-    
+# Connessione al database
 case "${GOVPAY_DB_TYPE:-hsql}" in
 postgresql|mysql|mariadb|oracle)
 
@@ -140,6 +140,22 @@ hsql|*)
     export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.HSQLDialect
 esac
 
+# Impostazioni keystore e truststore da utilizzare nei connettori https
+if [ -z "${WILDFLY_KEYSTORE}"  ]
+then
+    export WILDFLY_KEYSTORE="${JBOSS_HOME}/standalone/configuration/testkeystore.jks"
+    export WILDFLY_KEYSTORE_PASSWORD=123456
+fi
+# Se non specificato altrimenti, per la password della pk utilizzo la stessa password del keystore
+if [ -z "${WILDFLY_KEYSTORE_KEY_PASSWORD}" ]
+then
+    export WILDFLY_KEYSTORE_KEY_PASSWORD="${WILDFLY_KEYSTORE_PASSWORD}"
+fi
+if [ -z "${WILDFLY_TRUSTSTORE}" ]
+then
+    export WILDFLY_TRUSTSTORE="${JBOSS_HOME}/standalone/configuration/testkeystore.jks"
+    export WILDFLY_TRUSTSTORE_PASSWORD=123456
+fi
 
 #
 # Startup
@@ -225,7 +241,7 @@ then
 	NUM_RETRY=0
 	while [ ${GOVPAY_READY} -ne 0 -a ${NUM_RETRY} -lt ${GOVPAY_STARTUP_CHECK_MAX_RETRY} ]
 	do
-        HTTP_CODE=$(curl -s -w '%{http_code}' -u 'gpadmin:Password1!' -o /tmp/check-db.json http://localhost:8082/govpay/backend/api/backoffice/rs/basic/v1/sonde/check-db)
+        HTTP_CODE=$(curl -s -w '%{http_code}' -u 'gpadmin:Password1!' -o /tmp/check-db.json http://localhost:8080/govpay/backend/api/backoffice/rs/basic/v1/sonde/check-db)
         [ "${HTTP_CODE}" == "200" ]
 		GOVPAY_READY=$?
 		NUM_RETRY=$(( ${NUM_RETRY} + 1 ))
