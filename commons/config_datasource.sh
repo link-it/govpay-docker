@@ -4,7 +4,7 @@ CLI_SCRIPT_CUSTOM_DIR="${JBOSS_HOME}/standalone/configuration/custom_cli"
 
 case "${GOVPAY_DB_TYPE:-hsql}" in
 postgresql)
-    GOVPAY_DRIVER_JDBC="/opt/postgresql-${POSTGRES_JDBC_VERSION}.jar"
+    GOVPAY_DRIVER_JDBC="/opt/postgresql-jdbc.jar"
     GOVPAY_DS_DRIVER_CLASS='org.postgresql.Driver'
     GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
 
@@ -49,7 +49,7 @@ oracle)
 
 ;;
 hsql|*)
-    GOVPAY_DRIVER_JDBC="opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/lib/hsqldb.jar"
+    GOVPAY_DRIVER_JDBC="opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/lib/hsqldb-jdk8.jar"
     GOVPAY_DS_DRIVER_CLASS='org.hsqldb.jdbc.JDBCDriver'
     GOVPAY_DS_VALID_CONNECTION_SQL='SELECT * FROM (VALUES(1));'
 
