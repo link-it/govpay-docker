@@ -22,7 +22,7 @@ GOVPAY_ARCHIVES_TYPE=${govpay_archives_type} \
 HSQLDB_FULLVERSION=2.4.1 \
 POSTGRES_JDBC_VERSION=42.2.10 
 
-RUN yum -q -y install unzip java-11-openjdk-headless nmap-ncat \
+RUN ulimit -n 1024000 yum -q -y install unzip java-11-openjdk-headless nmap-ncat \
 && yum clean all \
 && rm -rf /var/cache/yum \
 curl -q -sS -o /var/tmp/hsqldb-${HSQLDB_FULLVERSION}.zip https://sourceforge.net/projects/hsqldb/files/hsqldb/hsqldb_2_4/hsqldb-${HSQLDB_FULLVERSION}.zip/download \
