@@ -241,7 +241,7 @@ then
 	NUM_RETRY=0
 	while [ ${GOVPAY_READY} -ne 0 -a ${NUM_RETRY} -lt ${GOVPAY_STARTUP_CHECK_MAX_RETRY} ]
 	do
-        HTTP_CODE=$(curl -s -w '%{http_code}' -u 'gpadmin:Password1!' -o /tmp/check-db.json http://localhost:8080/govpay/backend/api/backoffice/rs/basic/v1/sonde/check-db)
+        HTTP_CODE=$(curl -s -w '%{http_code}' -o /tmp/info.json http://localhost:8080/govpay/backend/api/backoffice/rs/form/v1/info )
         [ "${HTTP_CODE}" == "200" ]
 		GOVPAY_READY=$?
 		NUM_RETRY=$(( ${NUM_RETRY} + 1 ))
