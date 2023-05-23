@@ -10,13 +10,13 @@ ARG govpay_log=/var/log/govpay
 # sanity check
 RUN [ -z "${govpay_fullversion}" ] && { echo 'Versione del software non indicata. Eseguire il build col parametro --build-arg govpay_fullversion=<VERSIONE>'; exit 1; }; \ 
 yum -y update \
-&& yum -y install zip unzip java-1.8.0-openjdk  \
+&& yum -y install zip unzip java-11-openjdk  \
 && yum clean all \
 && rm -rf /var/cache/yum
 
 
 ENV LANG=it_IT.UTF-8 \
-JAVA_HOME=/usr/lib/jvm/jre-1.8.0-openjdk \
+JAVA_HOME=/usr/lib/jvm/jre-11-openjdk \
 PATH=$JAVA_HOME/bin:$PATH \
 GOVPAY_HOME=${govpay_home} \
 GOVPAY_HOME_HTTPS=${govpay_home}_https \

@@ -21,14 +21,14 @@ ENV GOVPAY_HOME=${govpay_home} \
 GOVPAY_LOGDIR=${govpay_log} \
 GOVPAY_FULLVERSION=${govpay_fullversion} \
 HSQLDB_FULLVERSION=2.6.1 \
-WILDFLY_VERSION=18.0.1.Final \
+WILDFLY_VERSION=26.1.3.Final \
 WILDFLY_SHA1=ef0372589a0f08c36b15360fe7291721a7e3f7d9 \
-JBOSS_HOME=/opt/wildfly-18.0.1.Final \
+JBOSS_HOME=/opt/wildfly-26.1.3.Final \
 LAUNCH_JBOSS_IN_BACKGROUND=true
 
 RUN set -eux; \
 mkdir -p ${GOVPAY_HOME}  ${GOVPAY_LOGDIR};  \
-yum -q -y install ca-certificates unzip java-1.8.0-openjdk-headless; \
+yum -q -y install ca-certificates unzip java-11-openjdk-headless; \
 yum clean all; \
 rm -rf /var/cache/yum; \
 curl -kL -sS -q -o /var/tmp/hsqldb-${HSQLDB_FULLVERSION}.zip https://sourceforge.net/projects/hsqldb/files/hsqldb/hsqldb_2_6/hsqldb-${HSQLDB_FULLVERSION}.zip/download; \
@@ -143,9 +143,9 @@ ENV GOVPAY_HOME=${govpay_home} \
 GOVPAY_LOGDIR=${govpay_log} \
 GOVPAY_FULLVERSION=${govpay_fullversion} \
 HSQLDB_FULLVERSION=2.6.1 \
-WILDFLY_VERSION=18.0.1.Final \
+WILDFLY_VERSION=26.1.3.Final \
 WILDFLY_SHA1=ef0372589a0f08c36b15360fe7291721a7e3f7d9 \
-JBOSS_HOME=/opt/wildfly-18.0.1.Final \
+JBOSS_HOME=/opt/wildfly-26.1.3.Final \
 LAUNCH_JBOSS_IN_BACKGROUND=true
 
 RUN set -eux; \
@@ -160,7 +160,7 @@ rm -f  /etc/localtime && ln -s /usr/share/zoneinfo/Europe/Rome /etc/localtime; \
 mkdir -p ${GOVPAY_HOME}  ${GOVPAY_LOGDIR};  \
 chown -R wildfly:0 ${GOVPAY_HOME}  ${GOVPAY_LOGDIR}; \
 chmod -Rf g+rwX  ${GOVPAY_HOME}  ${GOVPAY_LOGDIR}; \
-yum -q -y install ca-certificates unzip nmap-ncat fontconfig freetype java-1.8.0-openjdk-headless; \
+yum -q -y install ca-certificates unzip nmap-ncat fontconfig freetype java-11-openjdk-headless; \
 yum clean all; \
 rm -rf /var/cache/yum; 
 
@@ -186,4 +186,4 @@ COPY --from=source_image_setup --chown=wildfly:0 /opt/ /opt/
 COPY --from=source_image_installer --chown=wildfly:0 /opt/govpay-installer-${GOVPAY_FULLVERSION}/dist/cfg/* ${GOVPAY_HOME}/
 USER wildfly
 EXPOSE 8080 8443 8445 8009
-ENTRYPOINT [ "/opt/wildfly-18.0.1.Final/bin/standalone_wrapper.sh" , "-b", "0.0.0.0" ]
+ENTRYPOINT [ "/opt/wildfly-26.1.3.Final/bin/standalone_wrapper.sh" , "-b", "0.0.0.0" ]
