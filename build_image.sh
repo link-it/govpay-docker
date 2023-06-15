@@ -276,6 +276,7 @@ TEMPORARY TABLESPACE "TEMP";
 ALTER USER "GOVPAY" QUOTA UNLIMITED ON "USERS";
 GRANT "CONNECT" TO "GOVPAY" ;
 GRANT "RESOURCE" TO "GOVPAY" ;
+GRANT CREATE VIEW TO "GOVPAY" ;
 EOSQL
 
     cat - << EOYAML >> compose/docker-compose.yaml
@@ -296,6 +297,8 @@ EOSQL
     container_name: or_govpay_${SHORT}
     image: container-registry.oracle.com/database/enterprise:19.3.0.0
     shm_size: 2g
+    ulimits:
+      nofile: 65536
     environment:
       - ORACLE_PDB=GOVPAYPDB
       - ORACLE_PWD=123456
