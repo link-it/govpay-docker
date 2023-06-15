@@ -178,6 +178,7 @@ ENV JAVA_OPTS="-server \
 -Djava.awt.headless=true \
 -Duser.language=it \
 -Duser.country=IT \
+-Duser.timezone=Europe/Rome \
 -Dfile.encoding=UTF-8"
 
 ARG source_image
