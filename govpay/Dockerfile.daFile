@@ -9,6 +9,7 @@ ARG govpay_log=/var/log/govpay
 
 # sanity check
 RUN [ -z "${govpay_fullversion}" ] && { echo 'Versione del software non indicata. Eseguire il build col parametro --build-arg govpay_fullversion=<VERSIONE>'; exit 1; }; \ 
+ulimit -n 1024; \
 yum -y update \
 && yum -y install zip unzip java-11-openjdk  \
 && yum clean all \

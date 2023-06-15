@@ -222,9 +222,9 @@ then
         fi
     done
     [ $FOUND -eq 0 ] && CMDLINARGS+=("--properties=${JVM_PROPERTIES_FILE}")
-    ${JBOSS_HOME}/bin/standalone.sh ${CMDLINARGS[@]} &
+    ${JBOSS_HOME}/bin/standalone.sh -b 0.0.0.0 ${CMDLINARGS[@]} &
 else
-    ${JBOSS_HOME}/bin/standalone.sh $@ &
+    ${JBOSS_HOME}/bin/standalone.sh -b 0.0.0.0 $@ &
 fi
 
 PID=$!

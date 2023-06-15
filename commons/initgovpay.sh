@@ -31,12 +31,14 @@ do
         DBNAME="${GOVPAY_DB_NAME}"
         DBUSER="${GOVPAY_DB_USER}"    
         DBPASS="${GOVPAY_DB_PASSWORD}"
+        QUERYSTRING="${DATASOURCE_CONN_PARAM}"
     else
 
         eval "SERVER=\${GOVPAY_${DESTINAZIONE}_DB_SERVER}"
         eval "DBNAME=\${GOVPAY_${DESTINAZIONE}_DB_NAME}"
         eval "DBUSER=\${GOVPAY_${DESTINAZIONE}_DB_USER}"    
         eval "DBPASS=\${GOVPAY_${DESTINAZIONE}_DB_PASSWORD}"
+        eval "QUERYSTRING=\${DATASOURCE_${DESTINAZIONE}_CONN_PARAM}"
     fi
     SERVER_PORT="${SERVER#*:}"
     SERVER_HOST="${SERVER%:*}"
@@ -52,17 +54,17 @@ do
     ;;
     postgresql) 
         [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=5432
-        JDBC_URL="jdbc:postgresql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${DATASOURCE_CONN_PARAM}"
+        JDBC_URL="jdbc:postgresql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${QUERYSTRING}"
         START_TRANSACTION="START TRANSACTION;"
     ;;
     mysql) 
         [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=3306
-        JDBC_URL="jdbc:mysql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${DATASOURCE_CONN_PARAM}"
+        JDBC_URL="jdbc:mysql://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${QUERYSTRING}"
         START_TRANSACTION="START TRANSACTION;"
     ;;
     mariadb) 
         [ "${SERVER_PORT}" == "${SERVER_HOST}" ] && SERVER_PORT=3306
-        JDBC_URL="jdbc:mariadb://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${DATASOURCE_CONN_PARAM}"
+        JDBC_URL="jdbc:mariadb://${SERVER_HOST}:${SERVER_PORT}/${DBNAME}${QUERYSTRING}"
         START_TRANSACTION="START TRANSACTION;"
     ;;
     hsql|*)
@@ -74,7 +76,7 @@ do
     ;;
     esac
 
-    INVOCAZIONE_CLIENT="-Dfile.encoding=UTF-8 -cp ${GOVPAY_DRIVER_JDBC}:/opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/lib/sqltool-jdk8.jar org.hsqldb.cmdline.SqlTool --rcFile=${SQLTOOL_RC_FILE} "
+    INVOCAZIONE_CLIENT="-Dfile.encoding=UTF-8 -cp ${GOVPAY_DRIVER_JDBC}:/opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/lib/sqltool.jar org.hsqldb.cmdline.SqlTool --rcFile=${SQLTOOL_RC_FILE} "
     cat - <<EOSQLTOOL >> ${SQLTOOL_RC_FILE}
 
 urlid govpayDB${DESTINAZIONE}
