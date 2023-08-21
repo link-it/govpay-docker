@@ -126,7 +126,7 @@ stop-embedded-server \n\
 
 RUN mkdir -p /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ \
 && chown -R wildfly:0 ${JBOSS_HOME}/bin/standalone_wrapper.sh ${JBOSS_HOME}/bin/initgovpay.sh ${JBOSS_HOME}/standalone ${GOVPAY_HOME}  ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ \
-&& chmod -Rf g+rwX  ${JBOSS_HOME}/standalone ${GOVPAY_HOME}  ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ \
+&& chmod -Rf g+rwX  ${JBOSS_HOME}/standalone ${JBOSS_HOME}/modules/govpayJDBCMod/main/*.jar ${GOVPAY_HOME}  ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ \
 && chmod ug=rx ${JBOSS_HOME}/bin/standalone_wrapper.sh ${JBOSS_HOME}/bin/initgovpay.sh
 
 
