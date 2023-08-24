@@ -219,12 +219,13 @@ EOSQLTOOL
                 #
                 if [ "${GOVPAY_DB_TYPE:-hsql}" == 'oracle' ]
                 then
-                    # La sintassi dei trigger è problematica
+                    # La sintassi dei trigger ed delle functions è problematica
                     # utilizzo la raw mode per evitare errori di sintassi
                     # http://www.hsqldb.org/doc/2.0/util-guide/sqltool-chapt.html#sqltool_raw-sect
                     #
-                    sed -i -e '/^CREATE TRIGGER .*$/i \
-\\.' -e 's/^\/$/.\n:;/' /var/tmp/${GOVPAY_DB_TYPE:-hsql}/gov_pay${SUFFISSO}.sql
+		    sed -i -r -e '/^CREATE( OR REPLACE)? (TRIGGER|FUNCTION) .*$/i \
+\\.' -e 's/^\/$/.\n:;/'  /var/tmp/${GOVPAY_DB_TYPE:-hsql}/gov_pay${SUFFISSO}.sql
+
                 fi
                 #
                 # Inizializzazione database ${DESTINAZIONE}
