@@ -180,15 +180,27 @@ then
 					echo "INFO: Customizzazioni ... eseguo $f"
 					"$f"
 				else
-					echo "INFO: Customizzazioni ... eseguo $f"
+					echo "INFO: Customizzazioni ... importo $f"
 					. "$f"
 				fi
 				;;
 			*.cli)
-                echo "INFO: Customizzazioni ... eseguo $f"; 
-                ${JBOSS_HOME}/bin/jboss-cli.sh --file=$f
+				echo "INFO: Customizzazioni ... eseguo $f"; 
+				if ! grep -q embed-server "$f"
+				then
+				    # Mi assicuro che sia presente la direttiva embed-server in cima allo script
+				    # perche l'application server a questo punto non è ancora attivo
+				    echo -e 'embed-server --server-config=standalone.xml --std-out=echo\n' > "/tmp/$(basename $f).fix"
+				    cat "$f" >> "/tmp/$(basename $f).fix"
+				    echo -e '\nstop-embedded-server\n' >> "/tmp/$(basename $f).fix"
+				    ${JBOSS_HOME}/bin/jboss-cli.sh --file="/tmp/$(basename $f).fix"
+				else
+				    ${JBOSS_HOME}/bin/jboss-cli.sh --file="$f"
+				fi
+				;;
+			*)  
+                echo "INFO: Customizzazioni ... IGNORO $f"
                 ;;
-			*) echo "INFO: Customizzazioni ... ignoro $f" ;;
 		esac
 		echo
 	done
