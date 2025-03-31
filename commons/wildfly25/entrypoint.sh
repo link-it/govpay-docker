@@ -10,42 +10,65 @@ GOVPAY_STARTUP_CHECK_SLEEP_TIME=${GOVPAY_STARTUP_CHECK_SLEEP_TIME:=5}
 GOVPAY_STARTUP_CHECK_MAX_RETRY=${GOVPAY_STARTUP_CHECK_MAX_RETRY:=60}
 
 declare -r JVM_PROPERTIES_FILE='/etc/wildfly/wildfly.properties'
-declare -r ENTRYPOINT_D='/docker-entrypoint-widlflycli.d/'
+declare -r ENTRYPOINT_D='/docker-entrypoint-govpay.d/'
 declare -r CUSTOM_INIT_FILE="${JBOSS_HOME}/standalone/configuration/custom_wildlfy_init"
-
-
-# Connessione al database
+declare -r MODULE_INIT_FILE="${JBOSS_HOME}/standalone/configuration/fix_module_init"
 case "${GOVPAY_DB_TYPE:-hsql}" in
-postgresql|mysql|mariadb|oracle)
+mysql|mariadb|postgresql|oracle)
 
     #
     # Sanity check variabili minime attese
     #
-    if [ -n "${GOVPAY_DB_SERVER}" -a -n  "${GOVPAY_DB_USER}" -a -n "${GOVPAY_DB_PASSWORD}" -a -n "${GOVPAY_DB_NAME}" ] 
+    if [ -n "${GOVPAY_DB_SERVER}" -a -n  "${GOVPAY_DB_USER}" -a -n "${GOVPAY_DB_NAME}" ] 
     then
+            [ -n "${GOVPAY_DB_PASSWORD}" ] || echo "WARN: La variabile GOVPAY_DB_PASSWORD non è stata impostata."
             echo "INFO: Sanity check variabili ... ok."
     else
         echo "FATAL: Sanity check variabili ... fallito."
-        echo "FATAL: Devono essere settate almeno le seguenti variabili:
+        echo "FATAL: Devono essere settate almeno le seguenti variabili obbligatorie:
 GOVPAY_DB_SERVER: ${GOVPAY_DB_SERVER}
 GOVPAY_DB_NAME: ${GOVPAY_DB_NAME}
 GOVPAY_DB_USER: ${GOVPAY_DB_USER}
-GOVPAY_DB_PASSWORD: ${GOVPAY_DB_NAME:+xxxxx}
 "
         exit 1
     fi
 
-    # Setting valori di Default per i datasource GOVPAY
 
-
-    # Settaggio Valori per i parametri dei datasource GOVPAY
-
-    ## parametri di connessione URL JDBC (default vuoto)
-    [ -n "${GOVPAY_DS_CONN_PARAM}" ] &&  export DATASOURCE_CONN_PARAM="?${GOVPAY_DS_CONN_PARAM}"
+    if [ -n "${GOVPAY_DS_JDBC_LIBS}" ] 
+    then
+        export GOVPAY_DRIVER_JDBC="${GOVPAY_DS_JDBC_LIBS}"
+        if [ ! -d "${GOVPAY_DS_JDBC_LIBS}" ]
+        then
+            echo "FATAL: Sanity check JDBC ... fallito."
+            echo "FATAL: Il path alla directory che contiene il driver JDBC, non è leggibile o non è una directory: [GOVPAY_DS_JDBC_LIBS=${GOVPAY_DS_JDBC_LIBS}] "
+            exit 1
+        fi
+    fi
 
 
     case "${GOVPAY_DB_TYPE:-hsql}" in
     postgresql)
+        # ATTENZIONE la variabile GOVPAY_ORACLE_JDBC_PATH è stata deprecata in favore di GOVPAY_DS_JDBC_LIBS.
+        # se solo GOVPAY_ORACLE_JDBC_PATH è valorizzata provo a mantenere la compatibilità usando il nome della directory 
+        # se nessuna delle due viene specificata si tratta di un errore per il db oracle
+        # se sono valorizzate entrambe viene usata GOVPAY_DS_JDBC_LIBS
+        if [ -n "${GOVPAY_ORACLE_JDBC_PATH}" ]
+        then
+            echo "WARN: Sanity check JDBC ... La variabile GOVPAY_ORACLE_JDBC_PATH è stata deprecata in favore di GOVPAY_DS_JDBC_LIBS."
+            if [ -z "${GOVPAY_DS_JDBC_LIBS}" ]
+            then
+                export GOVPAY_DS_JDBC_LIBS="$(dirname ${GOVPAY_ORACLE_JDBC_PATH})"
+                export GOVPAY_DRIVER_JDBC="${GOVPAY_DS_JDBC_LIBS}"
+            else
+                echo "WARN: Recupero librerie per il driver jdbc da [GOVPAY_DS_JDBC_LIBS=${GOVPAY_DS_JDBC_LIBS}]."
+            fi
+        elif [ -z "${GOVPAY_ORACLE_JDBC_PATH}" -a -z "${GOVPAY_DS_JDBC_LIBS}" ]
+        then
+            echo "FATAL: Sanity check JDBC ... fallito."
+            echo "FATAL: Il path alla directory che contiene il driver JDBC, deve essere indicato tramite la variabile GOVPAY_DS_JDBC_LIBS "
+            exit 1
+        fi
+
         if [ -z "${GOVPAY_POSTGRESQL_JDBC_PATH}" -o ! -f "${GOVPAY_POSTGRESQL_JDBC_PATH}" ]
         then
             echo "FATAL: Sanity check jdbc mysql ... fallito."
@@ -102,15 +125,30 @@ GOVPAY_DB_PASSWORD: ${GOVPAY_DB_NAME:+xxxxx}
     ;;
 
     oracle)
-        if [ -z "${GOVPAY_ORACLE_JDBC_PATH}" -o ! -f "${GOVPAY_ORACLE_JDBC_PATH}" ]
+        # ATTENZIONE la variabile GOVPAY_ORACLE_JDBC_PATH è stata deprecata in favore di GOVPAY_DS_JDBC_LIBS.
+        # se solo GOVPAY_ORACLE_JDBC_PATH è valorizzata provo a mantenere la compatibilità usando il nome della directory 
+        # se nessuna delle due viene specificata si tratta di un errore per il db oracle
+        # se sono valorizzate entrambe viene usata GOVPAY_DS_JDBC_LIBS
+        if [ -n "${GOVPAY_ORACLE_JDBC_PATH}" ]
         then
-            echo "FATAL: Sanity check jdbc oracle ... fallito."
-            echo "FATAL: Il path al driver jdbc oracle, non è stato indicato o non è leggibile: [GOVPAY_ORACLE_JDBC_PATH=${GOVPAY_ORACLE_JDBC_PATH}] "
+            echo "WARN: Sanity check JDBC ... La variabile GOVPAY_ORACLE_JDBC_PATH è stata deprecata in favore di GOVPAY_DS_JDBC_LIBS."
+            if [ -z "${GOVPAY_DS_JDBC_LIBS}" ]
+            then
+                export GOVPAY_DS_JDBC_LIBS="$(dirname ${GOVPAY_ORACLE_JDBC_PATH})"
+                export GOVPAY_DRIVER_JDBC="${GOVPAY_DS_JDBC_LIBS}"
+            else
+                echo "WARN: Recupero librerie per il driver jdbc da [GOVPAY_DS_JDBC_LIBS=${GOVPAY_DS_JDBC_LIBS}]."
+            fi
+        elif [ -z "${GOVPAY_ORACLE_JDBC_PATH}" -a -z "${GOVPAY_DS_JDBC_LIBS}" ]
+        then
+            echo "FATAL: Sanity check JDBC ... fallito."
+            echo "FATAL: Il path alla directory che contiene il driver JDBC, deve essere indicato tramite la variabile GOVPAY_DS_JDBC_LIBS "
             exit 1
         fi
+
         if [ "${GOVPAY_ORACLE_JDBC_URL_TYPE^^}" != 'SERVICENAME' -a "${GOVPAY_ORACLE_JDBC_URL_TYPE^^}" != 'SID' ]
         then
-            echo "FATAL: Sanity check variabili ... fallito."
+            echo "FATAL: Sanity check JDBC ... fallito."
             echo "FATAL: Valore non consentito per la variabile GOVPAY_ORACLE_JDBC_URL_TYPE: [GOVPAY_ORACLE_JDBC_URL_TYPE=${GOVPAY_ORACLE_JDBC_URL_TYPE}]."
             echo "       Valori consentiti: [ servicename , sid ]"
             exit 1
@@ -132,6 +170,8 @@ GOVPAY_DB_PASSWORD: ${GOVPAY_DB_NAME:+xxxxx}
         fi
     ;;
     esac
+    ## parametri di connessione URL JDBC (default vuoto)
+    [ -n "${GOVPAY_DS_CONN_PARAM}" ] &&  export DATASOURCE_CONN_PARAM="?${GOVPAY_DS_CONN_PARAM}"
 ;;
 hsql|*)
     export GOVPAY_DRIVER_JDBC="/opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/lib/hsqldb-jdk8.jar"
@@ -169,6 +209,45 @@ export JAVA_OPTS="$JAVA_OPTS -XX:MaxRAMPercentage=${MAX_JVM_PERC:-80.0}"
 ${JBOSS_HOME}/bin/initgovpay.sh || { echo "FATAL: Database non inizializzato."; exit 1; }
 
 # Eventuali inizializzazioni custom widfly
+if [ ! -f "${MODULE_INIT_FILE}" ]
+then
+
+    if [ -n "${GOVPAY_DS_JDBC_LIBS}" ]
+    then
+
+        declare -a lista_jar=( ${GOVPAY_DS_JDBC_LIBS}/*.jar )
+        if [ ${#lista_jar[@]} -eq 1 -a "${lista_jar[0]}" == "${GOVPAY_DS_JDBC_LIBS}/*.jar" ]
+        then
+            echo "FATAL: Sanity check JDBC ... fallito"
+            echo "FATAL: Nessuna libreria JDBC è presente in ${GOVPAY_DS_JDBC_LIBS}."
+            exit 1
+        elif [ ${#lista_jar[@]} -eq 1 ]
+        then
+            # è presente solo un jar: lo utilizzo
+            LIBRERIE="${lista_jar[0]}" 
+        elif [ ${#lista_jar[@]} -gt 1 ]
+        then
+            # sono presenti diversi jar concateno i path separandoli con ':'
+            LIBRERIE="${lista_jar[0]}"
+            for j in ${lista_jar[@]:1}
+            do
+                LIBRERIE="${j}:${LIBRERIE}"
+            done
+        fi
+
+        cat - << EOCLI > /tmp/__standalone_fix_module.cli   
+embed-server --server-config=standalone.xml --std-out=echo
+echo "Rimuovo modulo ${GOVPAY_DB_TYPE:-hsql}Mod"
+module remove --name=${GOVPAY_DB_TYPE:-hsql}Mod
+echo "Ricreo modulo ${GOVPAY_DB_TYPE:-hsql}Mod con risorse aggiornate"
+module add --name=${GOVPAY_DB_TYPE:-hsql}Mod --resources="${LIBRERIE}" --dependencies=javax.api,javax.transaction.api
+EOCLI
+
+        ${JBOSS_HOME}/bin/jboss-cli.sh --file="/tmp/__standalone_fix_module.cli"
+    fi
+
+    touch "${MODULE_INIT_FILE}"
+fi
 if [ -d "${ENTRYPOINT_D}" -a ! -f ${CUSTOM_INIT_FILE} ]
 then
     local f
@@ -243,7 +322,7 @@ PID=$!
 trap "kill -TERM $PID; export NUM_RETRY=${GOVPAY_STARTUP_CHECK_MAX_RETRY};" TERM INT
 
 
-if [ "${GOVPAY_STARTUP_CHECK_SKIP}" == "FALSE" ]
+if [ "${GOVPAY_STARTUP_CHECK_SKIP^^}" == "FALSE" ]
 then
 
 	/bin/rm -f  /tmp/govpay_ready

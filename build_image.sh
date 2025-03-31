@@ -42,17 +42,20 @@ TEMPLATE=
 ARCHIVI=
 CUSTOM_MANAGER=
 CUSTOM_MANAGER=
-CUSTOM_WIDLFLY_CLI=
+CUSTOM_GOVPAY_AS_CLI=
+REGISTRY_PREFIX=linkitaly
+#REGISTRY_PREFIX=localhost
 
 LATEST_LINK="$(curl -qw '%{redirect_url}\n' https://github.com/link-it/govpay/releases/latest 2> /dev/null)"
 LATEST_GOVPAY_RELEASE="${LATEST_LINK##*/}"
 
-while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
+while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:g:" opt; do
   case $opt in
     t) TAG="$OPTARG"; NO_COLON=${TAG//:/}
       [ ${#TAG} -eq ${#NO_COLON} -o "${TAG:0:1}" == ':' -o "${TAG:(-1):1}" == ':' ] && { echo "Il tag fornito \"$TAG\" non utilizza la sintassi <repository>:<tagname>"; exit 2; } ;;
     v) VER="$OPTARG"  ;;
     d) DB="${OPTARG}"; case "$DB" in hsql);;postgresql);;mysql);;mariadb);;oracle);;*) echo "Database non supportato: $DB"; exit 2;; esac ;;
+    g) APPSERV="${OPTARG}"; case "$APPSERV" in tomcat11);;wildfly25);;*) echo "Application server non supportato: $APPSERV"; exit 2;; esac ;;
     l) LOCALFILE="$OPTARG"
         [ ! -f "${LOCALFILE}" ] && { echo "Il file indicato non esiste o non e' raggiungibile [${LOCALFILE}]."; exit 3; } 
        ;;
@@ -62,6 +65,7 @@ while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
     i) TEMPLATE="${OPTARG}"
         [ ! -f "${TEMPLATE}" ] && { echo "Il file indicato non esiste o non e' raggiungibile [${TEMPLATE}]."; exit 3; } 
         ;;
+    a) ARCHIVI="${OPTARG}"; case "${ARCHIVI}" in govpay);;gde);;aca);;all);;*) echo "Tipologia archivi da inserire non riconosciuta: ${ARCHIVI}"; exit 2;; esac ;;
     r) CUSTOM_RUNTIME="${OPTARG}"
         [ ! -d "${CUSTOM_RUNTIME}" ] && { echo "la directory indicata non esiste o non e' raggiungibile [${CUSTOM_RUNTIME}]."; exit 3; }
         [ -z "$(ls -A ${CUSTOM_RUNTIME})" ] && { echo "la directory [${CUSTOM_RUNTIME}] e' vuota.";  }
@@ -81,13 +85,15 @@ while getopts "ht:v:d:jl:i:a:r:m:w:o:e:f:" opt; do
       ;;
   esac
 done
-
+[ "${ARCHIVI}" == 'aca' -o "${ARCHIVI}" == 'gde' -a "${DB:-hsql}" == 'hsql' ] && { echo "Il build dell'immagine batch ACA o del Microservizio GDE non puo' essere eseguita per il database HSQL"; exit 4; }
 
 rm -rf buildcontext
 mkdir -p buildcontext/
-cp -fr commons buildcontext/
+cp -fr "commons/${APPSERV:-tomcat11}" buildcontext/commons
+cp -f commons/* buildcontext/commons 2> /dev/null
 
-DOCKERBUILD_OPT=()
+#export DOCKER_BUILDKIT=0
+DOCKERBUILD_OPTS=('--build-arg' "govpay_appserver=${APPSERV:-tomcat11}")
 DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_fullversion=${VER:-${LATEST_GOVPAY_RELEASE}}")
 [ -n "${TEMPLATE}" ] &&  cp -f "${TEMPLATE}" buildcontext/commons/
 [ -n "${CUSTOM_GOVPAY_HOME}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_home=${CUSTOM_GOVPAY_HOME}")
@@ -121,7 +127,7 @@ then
 fi
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
-  -t linkitaly/govpay-installer_${DB:-hsql}:${VER:-${LATEST_GOVPAY_RELEASE}} \
+  -t ${REGISTRY_PREFIX}/govpay-installer_${DB:-hsql}:${VER:-${LATEST_GOVPAY_RELEASE}} \
   -f ${INSTALLER_DOCKERFILE} buildcontext
 RET=$?
 [ ${RET} -eq  0 ] || exit ${RET}
@@ -132,12 +138,14 @@ then
   unset  DOCKERBUILD_OPTS[$c]
   DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} "govpay_database_vendor=mariadb")
 fi
-# Build imagine govpay
+# Build imagine GovPay
 
+[ -n "${ARCHIVI}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_archives_type=${ARCHIVI}")
 if [ -z "$TAG" ] 
 then
-  REPO=linkitaly/govpay
+    REPO=${REGISTRY_PREFIX}/govpay
   TAGNAME=${VER:-${LATEST_GOVPAY_RELEASE}}
+  [ -n "${ARCHIVI}" -a "${ARCHIVI}" != 'all' ] && TAGNAME=${VER:-${LATEST_GOVPAY_RELEASE}}_${ARCHIVI}
   
   # mantengo i nomi dei tag compatibili con quelli usati in precedenza
   case "${DB:-hsql}" in
@@ -145,23 +153,46 @@ then
   postgresql) TAG="${REPO}:${TAGNAME}_postgres" ;;
   *) TAG="${REPO}:${TAGNAME}_${DB}" ;;
   esac
+
+  # il tag per tomcat11 diventa quello di default. Tutti gli altri hanno l'indicazione dell AS usato
+  [ "${APPSERV:-tomcat11}" != "tomcat11" -a "${ARCHIVI}" != 'aca'  -a "${ARCHIVI}" != 'gde' ] && TAG="${TAG}_${APPSERV}"
+
 fi
 
-if [ -n "${CUSTOM_WIDLFLY_CLI}" ]
+if [ -n "${CUSTOM_GOVPAY_AS_CLI}" ]
 then
-  cp -r ${CUSTOM_WIDLFLY_CLI}/ buildcontext/custom_widlfly_cli
-  DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "wildfly_custom_scripts=custom_widlfly_cli")
+  cp -r ${CUSTOM_GOVPAY_AS_CLI}/ buildcontext/custom_govpay_as_cli
+  DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_as_custom_scripts=custom_govpay_as_cli")
+fi
+
+if [ -n "${CUSTOM_ORACLE_JDBC}" ]
+then
+  cp -r ${CUSTOM_ORACLE_JDBC}/ buildcontext/custom_oracle_jdbc
+  DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "oracle_custom_jdbc=custom_oracle_jdbc")
+fi
+
+DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "source_image=${REGISTRY_PREFIX}/govpay-installer_${DB:-hsql}:${VER:-${LATEST_GOVPAY_RELEASE}}")
+
+
+if [ "${ARCHIVI}" == 'aca' ]
+then
+  DOCKERFILE="govpay/Dockerfile.govpay_aca"
+elif [ "${ARCHIVI}" == 'gde' ]
+then
+  DOCKERFILE="govpay/Dockerfile.govpay_gde"
+else
+  DOCKERFILE="govpay/${APPSERV:-tomcat11}/Dockerfile.govpay"
 fi
 
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
-  --build-arg source_image=linkitaly/govpay-installer_${DB:-hsql} \
-  -t "${TAG}" \
-  -f govpay/Dockerfile.govpay buildcontext
+-t "${TAG}" \
+-f $DOCKERFILE buildcontext
 RET=$?
 [ ${RET} -eq  0 ] || exit ${RET}
 
 
-if [ "${DB:-hsql}" != 'hsql' ]
+
+if [ "${DB:-hsql}" != 'hsql' -a "${ARCHIVI}" != 'aca' -a "${ARCHIVI}" != 'gde' ]
 then
   mkdir -p compose/govpay_{conf,log}
   chmod 777 compose/govpay_{conf,log}

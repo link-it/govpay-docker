@@ -1,7 +1,7 @@
 antinstaller_dbusername=
 antinstaller_principal=gpadmin
 antinstaller_principal_pwd=Password1!
-antinstaller_as=wildfly18
+antinstaller_as=#GOVPAY_APPSERVER#
 antinstaller_domain_port=8080
 porta-db=5432
 antinstaller_advanced=true
@@ -23,5 +23,6 @@ antinstaller_cod_univoco=00000000000ADMIN
 ant.install.config.version=0.0
 antinstaller_dbpassword=#GOVPAY_DBPASSWORD#
 antinstaller_dbname=#GOVPAY_DBNAME#
+antinstaller_jndi_name=java:comp/env/it.govpay.datasource
 antinstaller_log_level=INFO
 TABLESPACE=govpay
