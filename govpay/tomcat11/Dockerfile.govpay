@@ -17,7 +17,7 @@ ARG govpay_log
 
 USER root
 ENV GOVPAY_HOME=${govpay_home} \
-JAVA_HOME=/usr/lib/jvm/jre-11-openjdk \
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk \
 GOVPAY_HOME_HTTPS=${govpay_home}_https \
 GOVPAY_LOGDIR=${govpay_log} \
 GOVPAY_FULLVERSION=${govpay_fullversion} \
@@ -71,8 +71,9 @@ ENV GOVPAY_DB_TYPE=${govpay_database_vendor}
 
 COPY --from=source_image_full --chown=tomcat:0 /opt/govpay-installer-${GOVPAY_FULLVERSION}/dist/archivi/* ${CATALINA_HOME}/webapps/
 COPY --from=source_image_full --chown=tomcat:0 /opt/govpay-installer-${GOVPAY_FULLVERSION}/dist/sql/* /opt/${govpay_database_vendor}
-COPY --from=source_image_full --chown=0:0 /opt/change_dir_perms /usr/local/bin
-COPY --from=source_image_full --chown=tomcat:0 /opt/TomcatConfigCli.class ${CATALINA_HOME}/conf/it/link
+COPY --from=source_image_full --chown=0:0 /opt/change_dir_perms /usr/local/bin/
+COPY --from=source_image_full --chown=tomcat:0 /opt/TomcatConfigCli.class /usr/local/bin/it/link/
+COPY --from=source_image_full --chown=tomcat:0 /opt/govpay-installer-${GOVPAY_FULLVERSION}/dist/cfg/* ${GOVPAY_HOME}/
 
 
 ARG govpay_as_custom_scripts=commons/entrypoint.sh
@@ -107,19 +108,21 @@ echo -e '# Rimuovi Resource UserDatabase \n\
 # Aggiungi connettore HTTP su porta 8080\n\
 /Server/Service/Connector:add port=8080, protocol=HTTP/1.1, connectionTimeout=20000, redirectPort=8443, executor=http-worker, maxHttpHeaderSize=${GOVPAY_AS_MAX_HTTP_SIZE:-1048576}, maxPostSize=${GOVPAY_AS_MAX_POST_SIZE:-10485760}, bindOnInit=false\n\
 # Aggiungi connettore HTTPS\n\
-/Server/Service/Connector:add port=8443, protocol=HTTP/1.1, SSLEnabled=true, sslProtocol=TLS, executor=https-worker, maxPostSize=${GOVPAY_AS_MAX_POST_SIZE:-10485760}, bindOnInit=false\n\
-/Server/Service/Connector[@executor="https-worker"]/SSLHostConfig:add protocols=TLSv1.2, truststoreFile=${GOVPAY_AS_TRUSTSTORE}, truststorePassword=${GOVPAY_AS_TRUSTSTORE_PASSWORD}, truststoreType=${GOVPAY_AS_TRUSTSTORE_TIPO}\n\
-/Server/Service/Connector[@executor="https-worker"]/SSLHostConfig/Certificate:add protocols=TLSv1.2, certificateKeystoreFile=${GOVPAY_AS_KEYSTORE}, certificateKeystorePassword=${GOVPAY_AS_KEYSTORE_PASSWORD}, certificateKeystoreType=${GOVPAY_AS_KEYSTORE_TIPO}, certificateKeyPassword=${GOVPAY_AS_KEYSTORE_KEY_PASSWORD}\n\
+/Server/Service/Connector:add port=8443, protocol=HTTP/1.1, SSLEnabled=true, executor=https-worker, maxPostSize=${GOVPAY_AS_MAX_POST_SIZE:-10485760}, bindOnInit=false\n\
+/Server/Service/Connector[@executor="https-worker"]/SSLHostConfig:add protocols=TLSv1.2\n\
+/Server/Service/Connector[@executor="https-worker"]/SSLHostConfig/Certificate:add protocols=TLSv1.2, certificateKeystoreFile=${GOVPAY_AS_KEYSTORE}, certificateKeystorePassword=${GOVPAY_AS_KEYSTORE_PASSWORD}, certificateKeystoreType=${GOVPAY_AS_KEYSTORE_TIPO:-jks}, certificateKeyPassword=${GOVPAY_AS_KEYSTORE_KEY_PASSWORD}\n\
 # Aggiungi connettore HTTPS con MTLS\n\
-/Server/Service/Connector:add port=8443, protocol=HTTP/1.1, SSLEnabled=true, sslProtocol=TLS, executor=https-mtls-worker, maxPostSize=${GOVPAY_AS_MAX_POST_SIZE:-10485760}, bindOnInit=false\n\
-/Server/Service/Connector[@executor="https-mtls-worker"]/SSLHostConfig:add protocols=TLSv1.2, truststoreFile=${GOVPAY_AS_TRUSTSTORE}, truststorePassword=${GOVPAY_AS_TRUSTSTORE_PASSWORD}, truststoreType=${GOVPAY_AS_TRUSTSTORE_TIPO}, certificateVerification=required\n\
-/Server/Service/Connector[@executor="https-mtls-worker"]/SSLHostConfig[@certificateVerification="required"]/Certificate:add certificateKeystoreFile=${GOVPAY_AS_KEYSTORE}, certificateKeystorePassword=${GOVPAY_AS_KEYSTORE_PASSWORD}, certificateKeystoreType=${GOVPAY_AS_KEYSTORE_TIPO}, certificateKeyPassword=${GOVPAY_AS_KEYSTORE_KEY_PASSWORD}\n\
+/Server/Service/Connector:add port=8445, protocol=HTTP/1.1, SSLEnabled=true, executor=https-mtls-worker, maxPostSize=${GOVPAY_AS_MAX_POST_SIZE:-10485760}, bindOnInit=false\n\
+/Server/Service/Connector[@executor="https-mtls-worker"]/SSLHostConfig:add protocols=TLSv1.2, truststoreFile=${GOVPAY_AS_TRUSTSTORE}, truststorePassword=${GOVPAY_AS_TRUSTSTORE_PASSWORD}, truststoreType=${GOVPAY_AS_TRUSTSTORE_TIPO:-jks}, certificateVerification=required\n\
+/Server/Service/Connector[@executor="https-mtls-worker"]/SSLHostConfig[@certificateVerification="required"]/Certificate:add certificateKeystoreFile=${GOVPAY_AS_KEYSTORE}, certificateKeystorePassword=${GOVPAY_AS_KEYSTORE_PASSWORD}, certificateKeystoreType=${GOVPAY_AS_KEYSTORE_TIPO:-jks}, certificateKeyPassword=${GOVPAY_AS_KEYSTORE_KEY_PASSWORD}\n\
 # Aggiungi connettore AJP su porta 8009\n\
 /Server/Service/Connector:add port=8009, protocol=AJP/1.3, redirectPort=8443, executor=ajp-worker, maxPostSize=${GOVPAY_AS_MAX_POST_SIZE:-10485760}, secretRequired=${GOVPAY_AS_AJP_SECRET:-false}\n\
 # Aggiungi gestione del suspend timeout\n\
 /Server/Service:write-attribute gracefulStopAwaitMillis=${GOVPAY_SUSPEND_TIMEOUT:-20}\n\
 # Configura RemoteIpValve\n\
 /Server/Service/Engine/Host/Valve:add className=org.apache.catalina.valves.RemoteIpValve, remoteIpHeader=x-forwarded-for, proxiesHeader=x-forwarded-by, protocolHeader=x-forwarded-proto\n\
+# Configura RewriteValve\n\
+/Server/Service/Engine/Host/Valve:add className=org.apache.catalina.valves.rewrite.RewriteValve\n\
 # Configura AccessLogValve\n\
 /Server/Service/Engine/Host/Valve[@className="org.apache.catalina.valves.AccessLogValve"]:write-attribute directory=${GOVPAY_LOGDIR}, suffix=.log \n\
 ' > /tmp/tomcat_configuration.cli; \ 
@@ -127,16 +130,14 @@ chmod 750 /usr/local/bin/tomcat-cli.sh /usr/local/bin/config_datasource.sh ; \
 /usr/local/bin/config_datasource.sh /tmp/tomcat_configuration.cli; \
 /usr/local/bin/tomcat-cli.sh /tmp/tomcat_configuration.cli; \
 echo "org.apache.tomcat.util.digester.PROPERTY_SOURCE=org.apache.tomcat.util.digester.EnvironmentPropertySource" >> "${CATALINA_HOME}/conf/catalina.properties"; \
-rm -rf /tmp/*;
+rm -rf /tmp/*; 
 
 
 RUN mkdir -p /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ /usr/share/licenses/govpay/third-party-licenses \
-&& chown -R tomcat:0 /usr/local/bin/entrypoint.sh /usr/local/bin/initgovpay.sh /usr/local/bin/initsql.sh /usr/local/bin/tomcat-cli.sh ${CATALINA_HOME} ${GOVPAY_HOME} ${GOVPAY_HOME_HTTPS} ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ \
+&& chown -R tomcat:0 /usr/local/bin/entrypoint.sh /usr/local/bin/initgovpay.sh /usr/local/bin/tomcat-cli.sh ${CATALINA_HOME} ${GOVPAY_HOME} ${GOVPAY_HOME_HTTPS} ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ \
 && chmod -Rf g+rwX  ${CATALINA_HOME} ${GOVPAY_HOME} ${GOVPAY_HOME_HTTPS} ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ /opt/${GOVPAY_DB_TYPE}/ \
-&& chmod ug=rx /usr/local/bin/entrypoint.sh /usr/local/bin/initgovpay.sh /usr/local/bin/initsql.sh /usr/local/bin/tomcat-cli.sh \
-&& chmod u+s /usr/local/bin/change_dir_perms
-
-
+&& chmod ug=rx /usr/local/bin/entrypoint.sh /usr/local/bin/initgovpay.sh /usr/local/bin/tomcat-cli.sh \
+&& chmod u+s /usr/local/bin/change_dir_perms 
 
 COPY --from=source_image_full /opt/govpay-installer-${GOVPAY_FULLVERSION}/doc/README.txt \
 /opt/govpay-installer-${GOVPAY_FULLVERSION}/doc/LICENSE* \
@@ -144,6 +145,7 @@ COPY --from=source_image_full /opt/govpay-installer-${GOVPAY_FULLVERSION}/doc/RE
 /usr/share/licenses/govpay/
 COPY --from=source_image_full /opt/govpay-installer-${GOVPAY_FULLVERSION}/doc/README.txt /opt/govpay-installer-${GOVPAY_FULLVERSION}/doc/third-party-licenses* /usr/share/licenses/govpay/third-party-licenses/
 USER tomcat
-EXPOSE 8080 8081 8082 8009
+WORKDIR /usr/local/tomcat
+EXPOSE 8080 8443 8445 8009
 ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
 CMD []

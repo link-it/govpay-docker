@@ -26,9 +26,9 @@ mysql|mariadb|postgresql|oracle)
     if [ -n "${GOVPAY_DB_SERVER}" -a -n  "${GOVPAY_DB_USER}" -a -n "${GOVPAY_DB_NAME}" ] 
     then
             [ -n "${GOVPAY_DB_PASSWORD}" ] || echo "WARN: La variabile GOVPAY_DB_PASSWORD non è stata impostata."
-            echo "INFO: Sanity check variabili ... ok."
+            echo "INFO: Sanity check variabili obbligatorie ... ok."
     else
-        echo "FATAL: Sanity check variabili ... fallito."
+        echo "FATAL: Sanity check variabili obbligatorie ... fallito."
         echo "FATAL: Devono essere settate almeno le seguenti variabili obbligatorie:
 GOVPAY_DB_SERVER: ${GOVPAY_DB_SERVER}
 GOVPAY_DB_NAME: ${GOVPAY_DB_NAME}
@@ -40,7 +40,6 @@ GOVPAY_DB_USER: ${GOVPAY_DB_USER}
 
     if [ -n "${GOVPAY_DS_JDBC_LIBS}" ] 
     then
-        export GOVPAY_DRIVER_JDBC="${GOVPAY_DS_JDBC_LIBS}"
         if [ ! -d "${GOVPAY_DS_JDBC_LIBS}" ]
         then
             echo "FATAL: Sanity check JDBC ... fallito."
@@ -73,12 +72,9 @@ GOVPAY_DB_USER: ${GOVPAY_DB_USER}
             exit 1
         fi
 
-        #export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/postgresql-jdbc.jar"
         export GOVPAY_DS_DRIVER_CLASS='org.postgresql.Driver'
         export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
         export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
-        rm -rf "${GOVPAY_DRIVER_JDBC}"
-        cp "${GOVPAY_POSTGRESQL_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
 
     ;;
     mysql)
@@ -108,12 +104,9 @@ GOVPAY_DB_USER: ${GOVPAY_DB_USER}
         else
             GOVPAY_DS_CONN_PARAM='?zeroDateTimeBehavior=convertToNull'
         fi
-        #export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/mysql-jdbc.jar"
         export GOVPAY_DS_DRIVER_CLASS='com.mysql.cj.jdbc.Driver'
         export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
         export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.MySQL57Dialect
-        rm -rf "${GOVPAY_DRIVER_JDBC}"
-        cp "${GOVPAY_MYSQL_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
     ;;
     mariadb)
         # ATTENZIONE la variabile GOVPAY_MARIADB_JDBC_PATH è stata deprecata in favore di GOVPAY_DS_JDBC_LIBS.
@@ -142,12 +135,9 @@ GOVPAY_DB_USER: ${GOVPAY_DB_USER}
         else
             GOVPAY_DS_CONN_PARAM='?zeroDateTimeBehavior=convertToNull'
         fi
-        #export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/mariadb-jdbc.jar"
         export GOVPAY_DS_DRIVER_CLASS='org.mariadb.jdbc.Driver'
         export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1;'
         export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.MySQL57Dialect
-        rm -rf "${GOVPAY_DRIVER_JDBC}"
-        cp "${GOVPAY_MARIADB_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
     ;;
 
     oracle)
@@ -179,12 +169,9 @@ GOVPAY_DB_USER: ${GOVPAY_DB_USER}
             echo "       Valori consentiti: [ servicename , sid ]"
             exit 1
         fi
-        #export GOVPAY_DRIVER_JDBC="${JBOSS_HOME}/modules/govpayJDBCMod/main/oracle-jdbc.jar"
         export GOVPAY_DS_DRIVER_CLASS='oracle.jdbc.OracleDriver'
         export GOVPAY_DS_VALID_CONNECTION_SQL='SELECT 1 FROM DUAL'
         export GOVPAY_HYBERNATE_DIALECT=org.hibernate.dialect.Oracle10gDialect
-        rm -rf "${GOVPAY_DRIVER_JDBC}"
-        cp "${GOVPAY_ORACLE_JDBC_PATH}"  "${GOVPAY_DRIVER_JDBC}"
 
         if [ "${GOVPAY_ORACLE_JDBC_URL_TYPE^^}" != 'SID' ] 
         then
@@ -199,7 +186,6 @@ GOVPAY_DB_USER: ${GOVPAY_DB_USER}
 
 ;;
 hsql|*)
-    #export GOVPAY_DRIVER_JDBC="/opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/lib/hsqldb-jdk8.jar"
     export GOVPAY_DS_JDBC_LIBS="/tmp/hsql-jdbc"
     mkdir /tmp/hsql-jdbc
     /bin/cp -f "/opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/lib/hsqldb.jar" ${GOVPAY_DS_JDBC_LIBS}
@@ -240,23 +226,63 @@ export GOVPAY_MAXIDLE_POOL=${GOVPAY_MAXIDLE_POOL:-${GOVPAY_MAX_POOL}}
 # Impostazioni keystore e truststore da utilizzare nei connettori https
 if [ -z "${GOVPAY_AS_KEYSTORE}"  ]
 then
-    echo "WARN: Sanity check HTTTPS ... La variabile GOVPAY_AS_KEYSTORE è vuota."
-    echo "WARN: Verra generato ."
-    export GOVPAY_AS_KEYSTORE="${CATALINA_HOME}/conf/testkeystore.jks"
-    export GOVPAY_AS_KEYSTORE_PASSWORD=123456
+    export GOVPAY_AS_KEYSTORE="${CATALINA_HOME}/conf/server_keystore.p12"
+    export GOVPAY_AS_KEYSTORE_PASSWORD='123456'
+    export GOVPAY_AS_KEYSTORE_TIPO='PKCS12'
+    export GOVPAY_AS_KEYSTORE_KEY_PASSWORD='123456'
+
+    echo "WARN: Sanity check HTTPS ... La variabile GOVPAY_AS_KEYSTORE è vuota."
+    echo "WARN: Verra generato un keystore di default con le seguenti caratteristiche:"
+    echo " - GOVPAY_AS_KEYSTORE='${GOVPAY_AS_KEYSTORE}'"
+    echo " - GOVPAY_AS_KEYSTORE_PASSWORD='${GOVPAY_AS_KEYSTORE_PASSWORD}'"
+    echo " - GOVPAY_AS_KEYSTORE_TIPO='${GOVPAY_AS_KEYSTORE_TIPO}'"
+    echo " - GOVPAY_AS_KEYSTORE_KEY_PASSWORD='${GOVPAY_AS_KEYSTORE_KEY_PASSWORD}'"
+
+    keytool -genkey \
+        -keystore "${GOVPAY_AS_KEYSTORE}"  -storetype "${GOVPAY_AS_KEYSTORE_TIPO}" -storepass "${GOVPAY_AS_KEYSTORE_PASSWORD}" \
+        -alias tomcat_govpay  -keypass "${GOVPAY_AS_KEYSTORE_KEY_PASSWORD}" -keyalg RSA -keysize 2048 \
+        -validity 10950  -dname "CN=test.govpay.it,C=IT"    
+
 fi
 # Se non specificato altrimenti, per la password della pk utilizzo la stessa password del keystore
 if [ -z "${GOVPAY_AS_KEYSTORE_KEY_PASSWORD}" ]
 then
+    echo "WARN: Sanity check HTTPS ... La variabile GOVPAY_AS_KEYSTORE_KEY_PASSWORD è vuota."
+    echo "Verrà utilizzato la password del keystore presente in GOVPAY_AS_KEYSTORE_PASSWORD"
     export GOVPAY_AS_KEYSTORE_KEY_PASSWORD="${GOVPAY_AS_KEYSTORE_PASSWORD}"
 fi
 if [ -z "${GOVPAY_AS_TRUSTSTORE}" ]
 then
-    export GOVPAY_AS_TRUSTSTORE="${CATALINA_HOME}/conf/testkeystore.jks"
-    export GOVPAY_AS_TRUSTSTORE_PASSWORD=123456
+
+    export GOVPAY_AS_TRUSTSTORE="${CATALINA_HOME}/conf/server_truststore.jks"
+    export GOVPAY_AS_TRUSTSTORE_PASSWORD="123456"
+    export GOVPAY_AS_TRUSTSTORE_TIPO="JKS"
+
+    echo "WARN: Sanity check HTTPS ... La variabile GOVPAY_AS_TRUSTSTORE è vuota."
+    echo "WARN: Verra generato un truststore di default con le seguenti caratteristiche"
+    echo " - GOVPAY_AS_TRUSTSTORE='${GOVPAY_AS_TRUSTSTORE}'"
+    echo " - GOVPAY_AS_TRUSTSTORE_PASSWORD='${GOVPAY_AS_TRUSTSTORE_PASSWORD}'"
+    echo " - GOVPAY_AS_TRUSTSTORE_TIPO='${GOVPAY_AS_TRUSTSTORE_TIPO}'"
+
+    # Il truststore non puo essere vuoto o contenere una chiave privata 
+    # Altrimenti il connettore HTTPS va in errore con:
+    # java.security.InvalidAlgorithmParameterException: the trustAnchors parameter must be non-empty
+    #
+    # Genero una coppia pk/x509 per un client di default
+    keytool -genkey \
+        -keystore "${CATALINA_HOME}/conf/server_keystore.jks"  -storetype PKCS12 -storepass 123456 \
+        -alias client -keypass 123456 -keyalg RSA -keysize 2048 \
+        -validity 3650 -dname "CN=GovPay Default Client,C=IT"
+    # Importo l'x509 nel truststore
+    keytool -exportcert \
+        -keystore "${CATALINA_HOME}/conf/server_keystore.jks" -storepass 123456 -storetype PKCS12 \
+        -alias client -rfc | keytool -importcert \
+             -keystore "${GOVPAY_AS_TRUSTSTORE}" -storepass "${GOVPAY_AS_TRUSTSTORE_PASSWORD}" \
+             -alias govpay_default_client -noprompt -storetype "${GOVPAY_AS_TRUSTSTORE_TIPO}"
 fi
 # Recupero l'indirizzo ip usato dal container (utilizzato dalle funzionalita di clustering / orchestration)
 export GP_IPADDRESS=$(grep -E "[[:space:]]${HOSTNAME}[[:space:]]*" /etc/hosts|head -n 1|awk '{print $1}')
+export JAVA_OPTS="$JAVA_OPTS -Dit.govpay.clusterId=${GP_IPADDRESS}"
 
 #
 # Startup
@@ -267,7 +293,7 @@ export JAVA_OPTS="$JAVA_OPTS -XX:MaxRAMPercentage=${MAX_JVM_PERC:-80.0}"
 
 
 # Inizializzazione del database
-${JBOSS_HOME}/bin/initgovpay.sh || { echo "FATAL: Database non inizializzato."; exit 1; }
+/usr/local/bin/initgovpay.sh || { echo "FATAL: Database non inizializzato."; exit 1; }
 
 # Eventuali inizializzazioni custom 
 if [ ! -f "${MODULE_INIT_FILE}" ]
@@ -300,7 +326,7 @@ then
     [ -n "${WILDFLY_HTTPS_WORKER_MAX_THREADS}" -a -z "${GOVPAY_AS_HTTPS_WORKER_MAX_THREADS}" ] && { echo "WARN: LA variabile WILDFLY_HTTPS_WORKER-MAX-THREADS è stata deprecata in favore di GOVPAY_AS_HTTPS_WORKER_MAX_THREADS."; export GOVPAY_AS_HTTPS_WORKER_MAX_THREADS="${WILDFLY_HTTPS_WORKER_MAX_THREADS}"; }
     [ -n "${WILDFLY_HTTP_WORKER_MAX_THREADS}" -a -z "${GOVPAY_AS_HTTP_WORKER_MAX_THREADS}" ] && { echo "WARN: LA variabile WILDFLY_HTTP_WORKER-MAX-THREADS è stata deprecata in favore di GOVPAY_AS_HTTP_WORKER_MAX_THREADS."; export GOVPAY_AS_HTTP_WORKER_MAX_THREADS="${WILDFLY_HTTP_WORKER_MAX_THREADS}"; }
     [ -n "${WILDFLY_AJP_WORKER_MAX_THREADS}" -a -z "${GOVPAY_AS_AJP_WORKER_MAX_THREADS}" ] && { echo "WARN: LA variabile WILDFLY_AJP_WORKER-MAX-THREADS è stata deprecata in favore di GOVPAY_AS_AJP_WORKER_MAX_THREADS."; export GOVPAY_AS_AJP_WORKER_MAX_THREADS="${WILDFLY_AJP_WORKER_MAX_THREADS}"; }
-    [ -n "${WILDFLY_MAX-POST-SIZE}" -a -z "${GOVPAY_AS_MAX_POST_SIZE}" ] && { echo "WARN: LA variabile WILDFLY_MAX-POST-SIZE è stata deprecata in favore di GOVPAY_AS_MAX_POST_SIZE."; export GOVPAY_AS_MAX_POST_SIZE="${WILDFLY_MAX_POST_SIZE}"; }
+    [ -n "${WILDFLY_MAX_POST_SIZE}" -a -z "${GOVPAY_AS_MAX_POST_SIZE}" ] && { echo "WARN: LA variabile WILDFLY_MAX-POST-SIZE è stata deprecata in favore di GOVPAY_AS_MAX_POST_SIZE."; export GOVPAY_AS_MAX_POST_SIZE="${WILDFLY_MAX_POST_SIZE}"; }
 
     [ "${GOVPAY_AS_AJP_LISTENER^^}" == 'FALSE' -a "${GOVPAY_AS_HTTP_LISTENER^^}" == 'FALSE' ] && echo "WARN: Tutti i connettori verranno disabilitati. Non sarà più possibile accedere ai servizi"
 
@@ -335,6 +361,18 @@ EOCLI
     [ -f /tmp/__fix_connettori.cli ] && /usr/local/bin/tomcat-cli.sh "/tmp/__fix_connettori.cli"
     touch "${CONNETTORI_INIT_FILE}"
 fi
+
+# Preparo le rewrite di comatibilità delle URL
+mkdir -p ${CATALINA_HOME}/conf/Catalina/localhost/
+echo 'RewriteRule ^/govpay/backend/api/backoffice(/?.*)$ /govpay-api-backoffice$1 [L,QSA]
+RewriteRule ^/govpay/backend/api/ragioneria(/?.*)$ /govpay-api-ragioneria$1 [L,QSA]
+RewriteRule ^/govpay/backend/api/pendenze(/?.*)$ /govpay-api-pendenze$1 [L,QSA]
+RewriteRule ^/govpay/frontend/api/pagamento(/?.*)$ /govpay-api-pagamento$1 [L,QSA]
+RewriteRule ^/govpay-web-connector(/?.*)$ /govpay-web-connector$1 [L,QSA]
+RewriteRule ^/govpay-api-pagopa(/?.*)$ /govpay-api-pagopa$1 [L,QSA]
+RewriteRule ^/govpay-api-legacy(/?.*)$ /govpay-api-legacy$1 [L,QSA]
+' > ${CATALINA_HOME}/conf/Catalina/localhost/rewrite.config
+
 
 if [ -d "${ENTRYPOINT_D}" -o  -d "${ENTRYPOINT_D_DEPRECATO}" ]
 then
