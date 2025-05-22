@@ -126,6 +126,7 @@ then
   fi
 fi
 
+export DOCKER_BUILDKIT=false
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
   -t ${REGISTRY_PREFIX}/govpay-installer_${DB:-hsql}:${VER:-${LATEST_GOVPAY_RELEASE}} \
   -f ${INSTALLER_DOCKERFILE} buildcontext
