@@ -49,6 +49,6 @@ COPY commons/change_dir_perms.c /opt
 RUN cd /opt; \
 gcc -o change_dir_perms change_dir_perms.c
 
-COPY commons/${govpay_appserver}/TomcatConfigCli.java* /opt
+COPY commons/TomcatConfigCli.java* /opt
 RUN [ -e "/opt/TomcatConfigCli.java"  ] && javac /opt/TomcatConfigCli.java 
 
