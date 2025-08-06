@@ -23,7 +23,7 @@ GOVPAY_LOGDIR=${govpay_log} \
 GOVPAY_FULLVERSION=${govpay_fullversion} \
 HSQLDB_FULLVERSION=2.7.4 \
 POSTGRES_JDBC_VERSION=42.7.5 \
-TOMCAT_VERSION=11.0.5 \
+TOMCAT_VERSION=11.0.8 \
 CATALINA_HOME=/usr/local/tomcat \
 TZ="Europe/Rome" 
 
