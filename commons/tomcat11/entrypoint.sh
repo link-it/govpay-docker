@@ -367,10 +367,8 @@ mkdir -p ${CATALINA_HOME}/conf/Catalina/localhost/
 echo 'RewriteRule ^/govpay/backend/api/backoffice(/?.*)$ /govpay-api-backoffice$1 [L,QSA]
 RewriteRule ^/govpay/backend/api/ragioneria(/?.*)$ /govpay-api-ragioneria$1 [L,QSA]
 RewriteRule ^/govpay/backend/api/pendenze(/?.*)$ /govpay-api-pendenze$1 [L,QSA]
-RewriteRule ^/govpay/frontend/api/pagamento(/?.*)$ /govpay-api-pagamento$1 [L,QSA]
-RewriteRule ^/govpay-web-connector(/?.*)$ /govpay-web-connector$1 [L,QSA]
-RewriteRule ^/govpay-api-pagopa(/?.*)$ /govpay-api-pagopa$1 [L,QSA]
-RewriteRule ^/govpay-api-legacy(/?.*)$ /govpay-api-legacy$1 [L,QSA]
+RewriteRule ^/govpay/frontend/api/pagopa(/?.*)$ /govpay-api-pagopa$1 [L,QSA]
+RewriteRule ^/govpay/frontend/api/user(/?.*)$ /govpay-api-user$1 [L,QSA]
 ' > ${CATALINA_HOME}/conf/Catalina/localhost/rewrite.config
 
 
