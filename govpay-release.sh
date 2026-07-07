@@ -70,10 +70,14 @@ if [[ "$LOCAL_FLAG" == "--local" ]]; then
   echo "   (usando installer locale: $INSTALLER)"
   ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_postgres" -v "$VERSION" -l "$INSTALLER" -d postgresql
   ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_mariadb"  -v "$VERSION" -l "$INSTALLER" -d mariadb
+  ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_mysql"    -v "$VERSION" -l "$INSTALLER" -d mysql
+  ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_oracle"   -v "$VERSION" -l "$INSTALLER" -d oracle
   ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}"          -v "$VERSION" -l "$INSTALLER"
 else
   ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_postgres" -v "$VERSION" -d postgresql
   ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_mariadb"  -v "$VERSION" -d mariadb
+  ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_mysql"    -v "$VERSION" -d mysql
+  ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}_oracle"   -v "$VERSION" -d oracle
   ./build_image.sh -t "${IMAGE_BASE}:${TAG_VERSION}"          -v "$VERSION"
 fi
 
@@ -84,6 +88,8 @@ if [[ -n "$IMAGE_REV" ]]; then
   echo "🏷️  Tag mobili ${VERSION}[_db] -> ${TAG_VERSION}..."
   docker tag "${IMAGE_BASE}:${TAG_VERSION}_postgres" "${IMAGE_BASE}:${VERSION}_postgres"
   docker tag "${IMAGE_BASE}:${TAG_VERSION}_mariadb"  "${IMAGE_BASE}:${VERSION}_mariadb"
+  docker tag "${IMAGE_BASE}:${TAG_VERSION}_mysql"    "${IMAGE_BASE}:${VERSION}_mysql"
+  docker tag "${IMAGE_BASE}:${TAG_VERSION}_oracle"   "${IMAGE_BASE}:${VERSION}_oracle"
   docker tag "${IMAGE_BASE}:${TAG_VERSION}"          "${IMAGE_BASE}:${VERSION}"
 fi
 
@@ -102,6 +108,8 @@ echo "🚀 Push immagini..."
 IMAGES=(
   "${IMAGE_BASE}:${TAG_VERSION}_postgres"
   "${IMAGE_BASE}:${TAG_VERSION}_mariadb"
+  "${IMAGE_BASE}:${TAG_VERSION}_mysql"
+  "${IMAGE_BASE}:${TAG_VERSION}_oracle"
   "${IMAGE_BASE}:${TAG_VERSION}"
   "${IMAGE_BASE}:latest"
 )
@@ -110,6 +118,8 @@ if [[ -n "$IMAGE_REV" ]]; then
   IMAGES+=(
     "${IMAGE_BASE}:${VERSION}_postgres"
     "${IMAGE_BASE}:${VERSION}_mariadb"
+    "${IMAGE_BASE}:${VERSION}_mysql"
+    "${IMAGE_BASE}:${VERSION}_oracle"
     "${IMAGE_BASE}:${VERSION}"
   )
 fi
