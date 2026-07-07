@@ -1,12 +1,16 @@
 # Console GovPay — Config.js esterno alla war
 
-Procedura per servire il `Config.js` della console GovPay da un **file esterno alla war**,
-montato sul volume `/etc/govpay`, senza ricostruire `govpay-console.war`.
+Meccanismo per servire il `Config.js` della console GovPay da un **file esterno alla war**,
+sul volume `/etc/govpay`, senza ricostruire `govpay-console.war`.
+
+> **Baked-in**: lo script sorgente è `commons/tomcat11/console-static-config.sh` e viene
+> installato dall'immagine Tomcat 11 in `/docker-entrypoint-govpay.d/30-console-static-config.sh`
+> (vedi `govpay/tomcat11/Dockerfile.govpay`). È quindi **attivo di default**: non serve montarlo
+> a runtime. Disattivabile con `GOVPAY_CONSOLE_EXTERNAL_CONFIG=false`.
 
 ## Cosa fa
 
-Lo script `console-static-config.sh` va montato in `/docker-entrypoint-govpay.d/` e viene
-eseguito dall'entrypoint **prima** dell'avvio di Tomcat. Ad ogni avvio:
+Ad ogni avvio, prima di Tomcat:
 
 1. **Seed Config.js** — se `/etc/govpay/static/govpay/web-console/assets/Config.js` non esiste,
    lo estrae da `govpay-console.war`; se esiste, usa quello del volume (le modifiche persistono).
@@ -33,19 +37,19 @@ eseguito dall'entrypoint **prima** dell'avvio di Tomcat. Ad ogni avvio:
 
 ## Uso con docker-compose
 
+Basta un volume persistente su `/etc/govpay` (la hook è già nell'immagine):
+
 ```yaml
 services:
   govpay:
     image: linkitaly/govpay:3.9.3        # adatta al tag/AS (tomcat11)
     volumes:
-      - govpay_home:/etc/govpay
-      - ../console/console-static-config.sh:/docker-entrypoint-govpay.d/30-console-static-config.sh:ro
+      - govpay_home:/etc/govpay          # persiste Config.js editato
+    # environment:
+    #   GOVPAY_CONSOLE_EXTERNAL_CONFIG: "false"   # per disattivare l'esternalizzazione
 volumes:
   govpay_home:
 ```
-
-Lo script è già eseguibile (viene lanciato come processo; se il bit `x` si perde è comunque
-sicuro perché l'entrypoint lo esegue con `source` e lo script non usa `exit`/`set -e`).
 
 ## Note
 
@@ -53,7 +57,7 @@ sicuro perché l'entrypoint lo esegue con `source` e lo script non usa `exit`/`s
 - Gli `addScript('assets/config/...')` interni a Config.js restano relativi e sono serviti dalla
   war (context `/govpay-console`): invariati.
 - Per rigenerare il Config.js dal war: cancellalo dal volume e riavvia il container.
-- Per disattivare l'override: rimuovi lo script dalla hook dir (i descriptor si possono cancellare
-  da `conf/Catalina/localhost/`).
+- Per disattivare del tutto: `GOVPAY_CONSOLE_EXTERNAL_CONFIG=false` (la console torna a usare il
+  Config.js interno alla war).
 - Path validi per **immagine Tomcat 11** (`CATALINA_HOME=/usr/local/tomcat`,
-  `GOVPAY_HOME=/etc/govpay`, `unzip` presente).
+  `GOVPAY_HOME=/etc/govpay`, `unzip` presente). Per wildfly25 andrebbe adattato/aggiunto a parte.

@@ -83,6 +83,9 @@ RUN [ -d /var/tmp/custom_cli ] && cp -r /var/tmp/custom_cli/ ${CATALINA_HOME}/co
 
 COPY commons/entrypoint.sh commons/initgovpay.sh commons/config_datasource.sh commons/tomcat-cli.sh /usr/local/bin/
 
+# Hook di avvio: esternalizzazione Config.js console GovPay (vedi console/README.md)
+COPY --chown=tomcat:0 commons/console-static-config.sh /docker-entrypoint-govpay.d/30-console-static-config.sh
+
 ARG oracle_custom_jdbc=commons/entrypoint.sh
 COPY ${oracle_custom_jdbc}* /var/tmp/oracle_custom_jdbc
 RUN [ -d /var/tmp/oracle_custom_jdbc ] || echo "Driver jdbc Oracle non presente"
@@ -136,7 +139,7 @@ rm -rf /tmp/*;
 RUN mkdir -p /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ /usr/share/licenses/govpay/third-party-licenses \
 && chown -R tomcat:0 /usr/local/bin/entrypoint.sh /usr/local/bin/initgovpay.sh /usr/local/bin/tomcat-cli.sh ${CATALINA_HOME} ${GOVPAY_HOME} ${GOVPAY_HOME_HTTPS} ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ \
 && chmod -Rf g+rwX  ${CATALINA_HOME} ${GOVPAY_HOME} ${GOVPAY_HOME_HTTPS} ${GOVPAY_LOGDIR} /opt/hsqldb-${HSQLDB_FULLVERSION}/hsqldb/database/ /opt/${GOVPAY_DB_TYPE}/ \
-&& chmod ug=rx /usr/local/bin/entrypoint.sh /usr/local/bin/initgovpay.sh /usr/local/bin/tomcat-cli.sh \
+&& chmod ug=rx /usr/local/bin/entrypoint.sh /usr/local/bin/initgovpay.sh /usr/local/bin/tomcat-cli.sh /docker-entrypoint-govpay.d/30-console-static-config.sh \
 && chmod u+s /usr/local/bin/change_dir_perms 
 
 COPY --from=source_image_full /opt/govpay-installer-${GOVPAY_FULLVERSION}/doc/README.txt \
