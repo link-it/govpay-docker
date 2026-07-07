@@ -185,7 +185,9 @@ else
   DOCKERFILE="govpay/${APPSERV:-tomcat11}/Dockerfile.govpay"
 fi
 
+VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 "${DOCKERBIN}" build "${DOCKERBUILD_OPTS[@]}" \
+--build-arg "vcs_ref=${VCS_REF}" \
 -t "${TAG}" \
 -f $DOCKERFILE buildcontext
 RET=$?

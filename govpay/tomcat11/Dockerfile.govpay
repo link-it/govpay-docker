@@ -14,6 +14,7 @@ LABEL org.opencontainers.image.description="Immagine utilizzata per il deploy de
 ARG govpay_fullversion
 ARG govpay_home
 ARG govpay_log
+ARG vcs_ref=
 
 USER root
 ENV GOVPAY_HOME=${govpay_home} \
@@ -25,7 +26,13 @@ HSQLDB_FULLVERSION=2.7.4 \
 POSTGRES_JDBC_VERSION=42.7.5 \
 TOMCAT_VERSION=11.0.22 \
 CATALINA_HOME=/usr/local/tomcat \
-TZ="Europe/Rome" 
+TZ="Europe/Rome"
+
+# Provenienza OCI: version = versione prodotto GovPay; revision = git sha del repo docker;
+# tomcat.version tracciato dall'ENV (motivo tipico dei ribuild a prodotto invariato)
+LABEL org.opencontainers.image.version="${GOVPAY_FULLVERSION}" \
+      org.opencontainers.image.revision="${vcs_ref}" \
+      it.govpay.tomcat.version="${TOMCAT_VERSION}"
 
 
 
