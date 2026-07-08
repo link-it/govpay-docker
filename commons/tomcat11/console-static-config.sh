@@ -1,10 +1,14 @@
 #!/bin/bash
 # Esternalizza Config.js della console GovPay sul volume /etc/govpay e ripunta index.html.
+# La dir esterna viene montata DENTRO il context /govpay-console (non un context separato),
+# cosi' la URL resta sotto /govpay-console/static/... ed e' compatibile con reverse proxy
+# che gia' inoltrano /govpay-console/ (nessuna regola proxy aggiuntiva richiesta).
 #
 #   Volume:     /etc/govpay/static/govpay/web-console/assets/Config.js   (seed da war se assente)
-#   Context 1:  conf/Catalina/localhost/static.xml         -> /static  (serve la dir esterna)
-#   index.html: <script src="/static/govpay/web-console/assets/Config.js">  (reso assoluto)
-#   Context 2:  conf/Catalina/localhost/govpay-console.xml -> override /index.html via PreResources
+#   Mount:      DirResourceSet base=/etc/govpay/static -> webAppMount /static (nel context console)
+#   URL:        /govpay-console/static/govpay/web-console/assets/Config.js
+#   index.html: <script src="static/govpay/web-console/assets/Config.js">  (relativo al base href)
+#   Descriptor: conf/Catalina/localhost/govpay-console.xml (mount dir esterna + override index.html)
 #
 # Bakata nell'immagine in /docker-entrypoint-govpay.d/ : eseguita dall'entrypoint prima
 # dell'avvio di Tomcat. Disattivabile con GOVPAY_CONSOLE_EXTERNAL_CONFIG=false.
@@ -17,18 +21,18 @@ _govpay_console_external_config() {
     local CONSOLE_ASSETS_DIR="${STATIC_ROOT}/govpay/web-console/assets"
     local CONFIG_JS="${CONSOLE_ASSETS_DIR}/Config.js"
 
-    # URL assoluto con cui index.html carichera' il Config.js (servito dal context /static)
-    local CONFIG_JS_URL="/static/govpay/web-console/assets/Config.js"
+    # src RELATIVO in index.html: con <base href="/govpay-console/"> il browser lo risolve
+    # in /govpay-console/static/... (path gia' inoltrato dal reverse proxy).
+    local CONFIG_JS_SRC="static/govpay/web-console/assets/Config.js"
 
     # War / webapp esplosa della console
     local CONSOLE_WAR CONSOLE_EXPLODED
     CONSOLE_WAR=$(ls "${CATALINA_HOME}"/webapps/govpay-console*.war 2>/dev/null | head -1)
     CONSOLE_EXPLODED=$(ls -d "${CATALINA_HOME}"/webapps/govpay-console*/ 2>/dev/null | head -1)
 
-    # Descriptor Tomcat (il nome file = context path)
+    # Descriptor Tomcat del context console (il nome file = context path /govpay-console)
     local CTX_DIR="${CATALINA_HOME}/conf/Catalina/localhost"
-    local STATIC_CTX="${CTX_DIR}/static.xml"                 # -> /static
-    local CONSOLE_CTX="${CTX_DIR}/govpay-console.xml"        # -> /govpay-console
+    local CONSOLE_CTX="${CTX_DIR}/govpay-console.xml"
 
     # index.html modificato (file derivato: rigenerato ad ogni avvio, fuori dal volume)
     local OVERRIDE_DIR="${CATALINA_HOME}/conf/govpay-console-override"
@@ -49,25 +53,7 @@ _govpay_console_external_config() {
         echo "WARN: govpay-console.war non trovata: seed di Config.js saltato."
     fi
 
-    # --- 2. Context /static che serve la directory esterna ---
-    cat > "${STATIC_CTX}" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Risorse statiche console GovPay dal volume: /static/govpay/web-console/assets/Config.js -->
-<Context
-    docBase="${STATIC_ROOT}"
-    path="/static"
-    reloadable="false"
-    privileged="false">
-    <!-- Impedisce di usare link all'interno delle directory sotto static -->
-    <Resources allowLinking="false" />
-
-    <!-- Previene sessioni non necessarie -->
-    <Manager pathname="" />
-</Context>
-EOF
-    echo "INFO: static.xml -> context /static (docBase=${STATIC_ROOT})"
-
-    # --- 3. index.html: ripunta il Config.js all'URL assoluto (derivato, rigenerato ogni avvio) ---
+    # --- 2. index.html: ripunta il Config.js sotto /govpay-console/static (derivato, ogni avvio) ---
     local INDEX_SRC=""
     if [ -n "${CONSOLE_WAR}" ] && [ -f "${CONSOLE_WAR}" ]; then
         unzip -p "${CONSOLE_WAR}" "index.html" > "${OVERRIDE_INDEX}.orig" 2>/dev/null
@@ -78,29 +64,37 @@ EOF
 
     if [ -n "${INDEX_SRC}" ]; then
         sed -E \
-            -e "s#src=\"assets/Config\.js\"#src=\"${CONFIG_JS_URL}\"#g" \
-            -e "s#src=\"@GOVPAY_CONFIG_JS_FILE_PATH@\"#src=\"${CONFIG_JS_URL}\"#g" \
+            -e "s#src=\"assets/Config\.js\"#src=\"${CONFIG_JS_SRC}\"#g" \
+            -e "s#src=\"@GOVPAY_CONFIG_JS_FILE_PATH@\"#src=\"${CONFIG_JS_SRC}\"#g" \
             "${INDEX_SRC}" > "${OVERRIDE_INDEX}"
         rm -f "${OVERRIDE_INDEX}.orig"
-
-        # --- 4. Context della console con override di /index.html ---
-        cat > "${CONSOLE_CTX}" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Override di index.html per caricare Config.js dal context /static -->
-<Context>
-    <Resources>
-        <PreResources
-            className="org.apache.catalina.webresources.FileResourceSet"
-            base="${OVERRIDE_INDEX}"
-            webAppMount="/index.html"
-            readOnly="true" />
-    </Resources>
-</Context>
-EOF
-        echo "INFO: index.html ripuntato a ${CONFIG_JS_URL}; govpay-console.xml scritto."
     else
-        echo "WARN: index.html non trovato nel war: override saltato."
+        echo "WARN: index.html non trovato nel war: override index.html saltato."
     fi
+
+    # --- 3. Context della console: monta la dir esterna sotto /static e sovrascrive index.html ---
+    #        (nessun context /static separato -> tutto sotto /govpay-console/, proxy-friendly)
+    {
+        echo '<?xml version="1.0" encoding="UTF-8"?>'
+        echo '<!-- Risorse statiche console GovPay dal volume, servite sotto /govpay-console/static/ -->'
+        echo '<Context>'
+        echo '    <Resources allowLinking="false">'
+        echo "        <PreResources"
+        echo "            className=\"org.apache.catalina.webresources.DirResourceSet\""
+        echo "            base=\"${STATIC_ROOT}\""
+        echo "            webAppMount=\"/static\""
+        echo "            readOnly=\"true\" />"
+        if [ -f "${OVERRIDE_INDEX}" ]; then
+            echo "        <PreResources"
+            echo "            className=\"org.apache.catalina.webresources.FileResourceSet\""
+            echo "            base=\"${OVERRIDE_INDEX}\""
+            echo "            webAppMount=\"/index.html\""
+            echo "            readOnly=\"true\" />"
+        fi
+        echo '    </Resources>'
+        echo '</Context>'
+    } > "${CONSOLE_CTX}"
+    echo "INFO: govpay-console.xml scritto: /govpay-console/static -> ${STATIC_ROOT}; index.html -> src=${CONFIG_JS_SRC}"
 
     # --- Permessi (tomcat e' nel gruppo 0) ---
     chmod -R g+rwX "${STATIC_ROOT}" "${OVERRIDE_DIR}" 2>/dev/null

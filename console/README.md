@@ -8,21 +8,24 @@ sul volume `/etc/govpay`, senza ricostruire `govpay-console.war`.
 > (vedi `govpay/tomcat11/Dockerfile.govpay`). È quindi **attivo di default**: non serve montarlo
 > a runtime. Disattivabile con `GOVPAY_CONSOLE_EXTERNAL_CONFIG=false`.
 
-## Cosa fa
+La dir esterna viene montata **dentro il context `/govpay-console`** (non un context separato),
+così la URL resta sotto `/govpay-console/static/...`: compatibile con reverse proxy che già
+inoltrano `/govpay-console/`, **senza regole proxy aggiuntive**.
 
 Ad ogni avvio, prima di Tomcat:
 
 1. **Seed Config.js** — se `/etc/govpay/static/govpay/web-console/assets/Config.js` non esiste,
    lo estrae da `govpay-console.war`; se esiste, usa quello del volume (le modifiche persistono).
-2. **Context `/static`** — scrive `conf/Catalina/localhost/static.xml` con
-   `docBase=/etc/govpay/static`, che serve la directory esterna
-   (URL: `/static/govpay/web-console/assets/Config.js`).
-3. **index.html** — estrae `index.html` dalla war e ne riscrive il tag
-   `<script src="assets/Config.js">` in `<script src="/static/govpay/web-console/assets/Config.js">`
-   (path assoluto → ignora il `<base href="/govpay-console/">`). File derivato, rigenerato ad ogni
-   avvio in `conf/govpay-console-override/` (fuori dal volume).
-4. **Context console** — scrive `conf/Catalina/localhost/govpay-console.xml` che sovrappone
-   l'`index.html` modificato alla war via `PreResources`/`FileResourceSet` (nessuna ricompattazione).
+2. **index.html** — estrae `index.html` dalla war e ne riscrive il tag
+   `<script src="assets/Config.js">` in `<script src="static/govpay/web-console/assets/Config.js">`
+   (src **relativo** → risolto dal browser sotto `<base href="/govpay-console/">` in
+   `/govpay-console/static/...`). File derivato, rigenerato ad ogni avvio in
+   `conf/govpay-console-override/` (fuori dal volume).
+3. **Context console** — scrive `conf/Catalina/localhost/govpay-console.xml` che, sul context
+   `/govpay-console`, aggiunge via `PreResources`:
+   - `DirResourceSet` `base=/etc/govpay/static` → `webAppMount=/static` (serve la dir esterna
+     sotto `/govpay-console/static/`, URL finale `/govpay-console/static/govpay/web-console/assets/Config.js`);
+   - `FileResourceSet` che sovrappone l'`index.html` modificato (nessuna ricompattazione della war).
 
 ## Layout sul volume
 
