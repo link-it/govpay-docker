@@ -371,6 +371,11 @@ RewriteRule ^/govpay/frontend/api/pagopa(/?.*)$ /govpay-api-pagopa$1 [L,QSA]
 RewriteRule ^/govpay/frontend/api/user(/?.*)$ /govpay-api-user$1 [L,QSA]
 ' > ${CATALINA_HOME}/conf/Catalina/localhost/rewrite.config
 
+# Context descriptor per l'API backoffice: cookie di sessione compatibili con
+# reverse proxy / cross-site (SameSite=None, path /, crossContext).
+echo '<Context sessionCookiePath="/" sessionCookieSameSite="None" crossContext="true">
+</Context>' > ${CATALINA_HOME}/conf/Catalina/localhost/govpay-api-backoffice.xml
+
 
 if [ -d "${ENTRYPOINT_D}" -o  -d "${ENTRYPOINT_D_DEPRECATO}" ]
 then
